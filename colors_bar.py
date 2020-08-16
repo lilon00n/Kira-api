@@ -1,143 +1,143 @@
 import sys
 from PDFlib.PDFlib import *
+import json
 
-title = "Nombre de colores"
-searchpath = sys.argv[1]
-pdffile = sys.argv[2]
-outfile = sys.argv[3]
-colors = sys.argv[4].split(',')
-x = float(sys.argv[5])
-y = float(sys.argv[6])
-intensities = sys.argv[7].split(',')
-size = float(sys.argv[8])
-place = sys.argv[9]
-sideX = sys.argv[10]
-sideY = sys.argv[11]
-p = None
+def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,sideY):
+    title = "Nombre de colores"
+    intensities=intensities.split(',')
+    x = float(x)
+    y = float(y)
+    size = float(size)
+    p = None
+    print("empiezo")
+    try:
+        p = PDFlib()
 
-try:
-    p = PDFlib()
+        p.set_option("searchpath={" + searchpath + "}")
 
-    p.set_option("searchpath={" + searchpath + "}")
+        # This means we must check return values of load_font() etc. 
+        p.set_option("errorpolicy=return")
 
-    # This means we must check return values of load_font() etc. 
-    p.set_option("errorpolicy=return")
-
-    #Open the input PDF */
-    indoc = p.open_pdi_document(pdffile, "")
-    if indoc == -1:
-        print("Error: " + p.get_errmsg())
-        next
-
-    pagewidth=p.pcos_get_number(indoc, "pages[0]/width")
-    pageheight=p.pcos_get_number(indoc, "pages[0]/height")
-
-    endpage = p.pcos_get_number(indoc, "length:pages")
-    pageopen = False 
-
-    if p.begin_document(outfile, "") == -1:
-        raise "Error: " + p.get_errmsg()
-
-    p.set_info("Creator", "PDFlib Cookbook")
-    p.set_info("Title", title )
-    
-    
-    # Loop over all pages of the input document 
-    for pageno in range(1, int(endpage)+1, 1): 
-        page = p.open_pdi_page(indoc, pageno, "")
-
-        if page == -1: 
+        #Open the input PDF */
+        indoc = p.open_pdi_document(pdffile, "")
+        if indoc == -1:
             print("Error: " + p.get_errmsg())
             next
+
+        pagewidth=p.pcos_get_number(indoc, "pages[0]/width")
+        pageheight=p.pcos_get_number(indoc, "pages[0]/height")
+
+        endpage = p.pcos_get_number(indoc, "length:pages")
+        pageopen = False 
+
+        if p.begin_document(outfile, "") == -1:
+            raise "Error: " + p.get_errmsg()
+
+        p.set_info("Creator", "PDFlib Cookbook")
+        p.set_info("Title", title )
         
-        # Start a new page 
-        if not pageopen: 
-            p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
-            pageopen = True
+        print("1")
+        
+        # Loop over all pages of the input document 
+        for pageno in range(1, int(endpage)+1, 1): 
+            page = p.open_pdi_page(indoc, pageno, "")
 
-        qcolors=len(colors)
-        qint=len(intensities)
-        retX=-1
-        retY=-1
-        if sideX == "i":
-            if place=="T" or place=="B":
-                x=x-qcolors*qint*size
-            elif place=="R" or place=="L" :
-                x=x-size
-            retX=x
+            if page == -1: 
+                print("Error: " + p.get_errmsg())
+                next
+            print("2")
+            # Start a new page 
+            if not pageopen: 
+                p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
+                pageopen = True
 
-        if sideY == "i":
-            if place=="T" or place=="B":
+            qcolors=len(colors)
+            qint=len(intensities)
+            retX=-1
+            retY=-1
+            print("3")
+            if sideX == "i":
+                if place=="T" or place=="B":
+                    x=x-qcolors*qint*size
+                elif place=="R" or place=="L" :
+                    x=x-size
+                retX=x
+
+            if sideY == "i":
+                if place=="T" or place=="B":
+                    y=y-size
+                elif place=="L" or place=="R":
+                    y=y-qcolors*qint*size
+                retY=y
+            print("4")
+            for color in colors: 
+                for i in intensities: 
+                    print("before intense")
+                    intense=int(i)/100
+                    print(intense)
+                    if "PANTONE" in color:
+                        p.set_graphics_option("fillcolor={ spotname { " +color +  "} " + str(intense) +"}")
+                    if color=="Cyan":
+                        p.set_graphics_option("fillcolor={ cmyk " + str(intense) + " 0 0 0 }")
+                    if color=="Magenta":
+                        p.set_graphics_option("fillcolor={ cmyk 0 " + str(intense) + " 0 0 }")
+                    if color=="Yellow":
+                        p.set_graphics_option("fillcolor={ cmyk 0 0 " + str(intense) + " 0 }")
+                    if color=="Black":
+                        p.set_graphics_option("fillcolor={ cmyk 0 0 0 " + str(intense) + "}")
+                    if color=="Red":
+                        p.set_graphics_option("fillcolor={ rgb " + str(intense) + " 0 0 }")
+                    if color=="Green":
+                        p.set_graphics_option("fillcolor={ rgb 0 " + str(intense) + " 0 }")
+                    if color=="Blue":
+                        p.set_graphics_option("fillcolor={ rgb 0 0 " + str(intense) + " }")
+                    
+                    if place=="L" or place=="R":
+                        p.rect(x, y+size, size, size)
+                        y=y+size
+                    elif place=="T":
+                        p.rect(x, y+size, size, size)
+                        x=x+size
+                    else:
+                        p.rect(x, y+size , size, size)
+                        x=x+size
+                    p.fill()
+            print("5")
+            if place=="L" or place=="R":
                 y=y-size
-            elif place=="L" or place=="R":
-                y=y-qcolors*qint*size
-            retY=y
-        for color in colors: 
-            for i in intensities: 
-                intense=int(i)/100
-
-                if "PANTONE" in color:
-                    p.set_graphics_option("fillcolor={ spotname { " +color +  "} " + str(intense) +"}")
-                if color=="Cyan":
-                    p.set_graphics_option("fillcolor={ cmyk " + str(intense) + " 0 0 0 }")
-                if color=="Magenta":
-                    p.set_graphics_option("fillcolor={ cmyk 0 " + str(intense) + " 0 0 }")
-                if color=="Yellow":
-                    p.set_graphics_option("fillcolor={ cmyk 0 0 " + str(intense) + " 0 }")
-                if color=="Black":
-                    p.set_graphics_option("fillcolor={ cmyk 0 0 0 " + str(intense) + "}")
-                if color=="Red":
-                    p.set_graphics_option("fillcolor={ rgb " + str(intense) + " 0 0 }")
-                if color=="Green":
-                    p.set_graphics_option("fillcolor={ rgb 0 " + str(intense) + " 0 }")
-                if color=="Blue":
-                    p.set_graphics_option("fillcolor={ rgb 0 0 " + str(intense) + " }")
-                
-                if place=="L" or place=="R":
-                    p.rect(x, y+size, size, size)
-                    y=y+size
-                elif place=="T":
-                    p.rect(x, y+size, size, size)
-                    x=x+size
-                else:
-                    p.rect(x, y+size , size, size)
-                    x=x+size
-                p.fill()
-        
-        if place=="L" or place=="R":
-            y=y-size
-        else:
-            x=x-size
-        
-        if sideX == "f":
-            x=x+size
-            retX=x 
-        
-        if sideY == "f":
-            y=y+size
-            retY=y 
+            else:
+                x=x-size
             
-        print(retX) 
-        print(retY)
+            if sideX == "f":
+                x=x+size
+                retX=x 
+            
+            if sideY == "f":
+                y=y+size
+                retY=y 
+            print("6")
+            p.fit_pdi_page(page, 0, pageheight,"")
 
-        p.fit_pdi_page(page, 0, pageheight,"")
+            p.close_pdi_page(page)
+        
+            p.end_page_ext("")
 
-        p.close_pdi_page(page)
-    
-        p.end_page_ext("")
+        p.close_pdi_document(indoc)
+        
+        print("7")
+        p.end_document("")
+        print("llego hasta aca")
+        return (json.dumps({
+                retX:retX,
+                retY:retY,
+            }))
+    except PDFlibException as ex:
+        print("PDFlib exception occurred:")
+        print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))
 
-    p.close_pdi_document(indoc)
-    
-    
-    p.end_document("")
+    except Exception as ex:
+        print(ex)
 
-except PDFlibException as ex:
-    print("PDFlib exception occurred:")
-    print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))
-
-except Exception as ex:
-    print(ex)
-
-finally:
-    if p:
-        p.delete()
+    finally:
+        if p:
+            p.delete()

@@ -1,18 +1,20 @@
 from PDFlib.PDFlib import *
 import sys
-
+import json
 def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
     title = "Nombre de colores"
-    searchpath = sys.argv[1]
-    pdffile = sys.argv[2]
-    outfile = sys.argv[3]
-    colors = sys.argv[4].split(',')
-    fsize = float(sys.argv[5])
-    x = float(sys.argv[6])
-    y = float(sys.argv[7])
-    place = sys.argv[8]
-    sideX = sys.argv[9]
-    sideY = sys.argv[10]
+    #searchpath = sys.argv[1]
+    #pdffile = sys.argv[2]
+    #outfile = sys.argv[3]
+    colorNames= colors
+    
+    colors = colors.split(',')
+    fsize = float(fsize)
+    x = float(x)
+    y = float(y)
+    #place = sys.argv[8]
+    #sideX = sys.argv[9]
+    #sideY = sys.argv[10]
 
     p = None
 
@@ -40,7 +42,7 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
         p.set_info("Creator", "PDFlib Cookbook")
         p.set_info("Title", title )
         
-        
+        print("Aca1")
         # Loop over all pages of the input document 
         for pageno in range(1, int(endpage)+1, 1): 
             page = p.open_pdi_page(indoc, pageno, "")
@@ -48,7 +50,7 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
             if page == -1: 
                 print("Error: " + p.get_errmsg())
                 next
-            
+            print("Aca2")
             # Start a new page 
             if not pageopen: 
                 p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
@@ -64,8 +66,8 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
             retX=-1
             retY=-1
             optlist = "fontname=Helvetica fontsize=" + str(fsize)+ " encoding=unicode rotate="+ str(angle)
-            totalW = p.info_textline(sys.argv[3], "width", optlist)
-            totalH = p.info_textline(sys.argv[3], "height", optlist)
+            totalW = p.info_textline(colorNames, "width", optlist)
+            totalH = p.info_textline(colorNames, "height", optlist)
             if sideX == "i":
                 if place=="T" or place=="B":
                     x=x-totalW
@@ -88,7 +90,6 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
             else:
                 if place=="T":
                     y=y+totalH
-
             for color in colors: 
                 if "PANTONE" in color:
                     optlist = "fontname=Helvetica fontsize=" + str(fsize)+ " encoding=unicode rotate="+ str(angle) + " fillcolor={ spotname { " + color  +"} 1}"
@@ -137,8 +138,7 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
             
             #retX=x 
             #retY=y 
-            print(retX) 
-            print(retY)
+
             p.fit_pdi_page(page, 0, pageheight,"")
 
             p.close_pdi_page(page)
@@ -149,7 +149,11 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
         
         
         p.end_document("")
-
+        
+        return (json.dumps({
+            retX:retX,
+            retY:retY,
+        }))
     except PDFlibException as ex:
         print("PDFlib exception occurred:")
         print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))

@@ -1,102 +1,102 @@
-title = "Marcas de corte"
-crop_size = 0.3
-
 import sys
-searchpath =  sys.argv[1]
-pdffile = sys.argv[2]
-outfile = sys.argv[3]
-x = float(sys.argv[4])
-y = float(sys.argv[5])
+import json
 from PDFlib.PDFlib import *
 
-p = None
+def make(searchpath, pdffile, outfile, x, y, crop_size):
+    title = "Marcas de corte"
+    crop_size = 0.3
 
-def create_micropoint(p, radius):
-    micropoint = -1;
+    x = float(x)
+    y = float(y)
 
-    #Outer circle
-    micropoint = p.add_path_point(micropoint, -2 * radius / 2.445, 0, "move",  "linewidth=0.01 fill nostroke fillcolor={gray 1}")
-    micropoint = p.add_path_point(micropoint,  2 * radius / 2.445, 0, "control", "")
-    micropoint = p.add_path_point(micropoint, -2* radius / 2.445, 0, "circular", "")
+    p = None
 
-    #Inner circle
-    micropoint = p.add_path_point(micropoint, -radius / 3, 0, "move",  "fill nostroke strokecolor={spotname All 0.5} fillcolor={spotname All 0.5}")
-    micropoint = p.add_path_point(micropoint, radius / 3, 0, "control", "")
-    micropoint = p.add_path_point(micropoint, -radius / 3, 0, "circular", "")
-    
-    return micropoint
+    def create_micropoint(p, radius):
+        micropoint = -1;
 
-def draw_corner(p, angle, x, y, crop_mark):
-    p.save()
-    p.translate(x, y)
-    p.rotate(angle)
-    p.draw_path(crop_mark, 0, 0, "fill stroke")
-    p.restore()
+        #Outer circle
+        micropoint = p.add_path_point(micropoint, -2 * radius / 2.445, 0, "move",  "linewidth=0.01 fill nostroke fillcolor={gray 1}")
+        micropoint = p.add_path_point(micropoint,  2 * radius / 2.445, 0, "control", "")
+        micropoint = p.add_path_point(micropoint, -2* radius / 2.445, 0, "circular", "")
 
-try:
-    p = PDFlib()
+        #Inner circle
+        micropoint = p.add_path_point(micropoint, -radius / 3, 0, "move",  "fill nostroke strokecolor={spotname All 0.5} fillcolor={spotname All 0.5}")
+        micropoint = p.add_path_point(micropoint, radius / 3, 0, "control", "")
+        micropoint = p.add_path_point(micropoint, -radius / 3, 0, "circular", "")
+        
+        return micropoint
 
-    p.set_option("searchpath={" + searchpath + "}")
+    def draw_corner(p, angle, x, y, crop_mark):
+        p.save()
+        p.translate(x, y)
+        p.rotate(angle)
+        p.draw_path(crop_mark, 0, 0, "fill stroke")
+        p.restore()
 
-    # This means we must check return values of load_font() etc. 
-    p.set_option("errorpolicy=return")
+    try:
+        p = PDFlib()
 
-    #Open the input PDF */
-    indoc = p.open_pdi_document(pdffile, "")
-    if indoc == -1:
-        print("Error: " + p.get_errmsg())
-        next
+        p.set_option("searchpath={" + searchpath + "}")
 
-    pagewidth=p.pcos_get_number(indoc, "pages[0]/width")
-    pageheight=p.pcos_get_number(indoc, "pages[0]/height")
+        # This means we must check return values of load_font() etc. 
+        p.set_option("errorpolicy=return")
 
-    endpage = p.pcos_get_number(indoc, "length:pages")
-    pageopen = False 
-    if p.begin_document(outfile, "") == -1:
-        raise "Error: " + p.get_errmsg()
-
-    p.set_info("Creator", "PDFlib Cookbook")
-    p.set_info("Title", title )
-    
-    
-    # Loop over all pages of the input document 
-    for pageno in range(1, int(endpage)+1, 1): 
-        page = p.open_pdi_page(indoc, pageno, "")
-
-        if page == -1: 
+        #Open the input PDF */
+        indoc = p.open_pdi_document(pdffile, "")
+        if indoc == -1:
             print("Error: " + p.get_errmsg())
             next
+
+        pagewidth=p.pcos_get_number(indoc, "pages[0]/width")
+        pageheight=p.pcos_get_number(indoc, "pages[0]/height")
+
+        endpage = p.pcos_get_number(indoc, "length:pages")
+        pageopen = False 
+        if p.begin_document(outfile, "") == -1:
+            raise "Error: " + p.get_errmsg()
+
+        p.set_info("Creator", "PDFlib Cookbook")
+        p.set_info("Title", title )
         
-        # Start a new page 
-        if not pageopen: 
-            p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
-            pageopen = True
-
-        p.fit_pdi_page(page, 0, pageheight,"")
-
-        p.set_graphics_option("fillcolor={spotname All 0.5} strokecolor={spotname All 0.5}")
-        micropoint = create_micropoint(p, crop_size)
-        draw_corner(p, 0, x, y,  micropoint)
         
-    
+        # Loop over all pages of the input document 
+        for pageno in range(1, int(endpage)+1, 1): 
+            page = p.open_pdi_page(indoc, pageno, "")
 
-        p.close_pdi_page(page)
-    
-        p.end_page_ext("")
+            if page == -1: 
+                print("Error: " + p.get_errmsg())
+                next
+            
+            # Start a new page 
+            if not pageopen: 
+                p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
+                pageopen = True
 
-    p.close_pdi_document(indoc)
-    
-    
-    p.end_document("")
+            p.fit_pdi_page(page, 0, pageheight,"")
 
-except PDFlibException as ex:
-    print("PDFlib exception occurred:")
-    print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))
+            p.set_graphics_option("fillcolor={spotname All 0.5} strokecolor={spotname All 0.5}")
+            micropoint = create_micropoint(p, crop_size)
+            draw_corner(p, 0, x, y,  micropoint)
+            
+        
 
-except Exception as ex:
-    print(ex)
+            p.close_pdi_page(page)
+        
+            p.end_page_ext("")
 
-finally:
-    if p:
-        p.delete()
+        p.close_pdi_document(indoc)
+        
+        
+        p.end_document("")
+
+    except PDFlibException as ex:
+        print("PDFlib exception occurred:")
+        print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))
+
+    except Exception as ex:
+        print(ex)
+
+    finally:
+        if p:
+            p.delete()
 
