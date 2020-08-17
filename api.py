@@ -25,7 +25,7 @@ def test():
 
 @app.route('/supportBar', methods=['POST'])
 def supportBar():
-    from  suppor_bar import make
+    from  support_bar import make
     if request.method == 'POST':
         body=request.get_json()
         searchpath= body["searchpath"]
@@ -35,8 +35,8 @@ def supportBar():
         y= body["y"] 
         width= body["width"]
         height= body["height"]
-        ret= make(searchpath, pdffile, outfile, x, y, width, height)
-        return ret
+        make(searchpath, pdffile, outfile, x, y, width, height)
+        return "ok"
 
 @app.route('/colorNames', methods=['POST'])
 def colorNames():
@@ -90,7 +90,7 @@ def cropMark():
         height= body["height"]
         dist_width= body["dist_width"]
         dist_height= body["dist_height"]
-        make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, dist_width, dist_height)
+        ret=make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, dist_width, dist_height)
         return "ok"
 
 @app.route('/registrationMark', methods=['POST'])
@@ -104,8 +104,8 @@ def registrationMark():
         x= body["x"]
         y= body["y"] 
         crop_size= body["crop_size"]
-        
-        make(searchpath, pdffile, outfile, x, y, crop_size)
+
+        ret=make(searchpath, pdffile, outfile, x, y, crop_size)
         return "ok"
 
 @app.route('/info', methods=['POST'])
@@ -137,8 +137,7 @@ def micropoint():
         outfile= body["outfile"] 
         x= body["x"]
         y= body["y"] 
-        
-        make(searchpath, pdffile, outfile, x, y,0.3)
+        ret=make(searchpath, pdffile, outfile, x, y,0.3)
         return "ok"
 
 @app.route('/rombos', methods=['POST'])
@@ -153,7 +152,7 @@ def rombos():
         x= body["x"]
         y= body["y"] 
         
-        make(searchpath, pdffile, outfile,rombofile, x, y)
+        ret=make(searchpath, pdffile, outfile,rombofile, x, y)
         return "ok"
 
 app.run(host="0.0.0.0", port=8000, debug=True)

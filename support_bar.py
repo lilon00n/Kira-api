@@ -63,7 +63,7 @@ def make(searchpath, pdffile, outfile, x, y, width, height):
         
         
         p.end_document("")
-
+        
     except PDFlibException as ex:
         print("PDFlib exception occurred:")
         print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))

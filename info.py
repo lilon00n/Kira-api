@@ -119,9 +119,6 @@ def make(searchpath, pdffile, outfile, info, fsize,x,y,place,sideX,sideY):
             if sideY == "f":
                 retY=y 
             
-            print(retX) 
-            print(retY)
-
             p.fit_pdi_page(page, 0, pageheight,"")
 
             p.close_pdi_page(page)
@@ -133,6 +130,10 @@ def make(searchpath, pdffile, outfile, info, fsize,x,y,place,sideX,sideY):
         
         p.end_document("")
 
+        return (json.dumps({
+                "retX":retX,
+                "retY":retY,
+            }))
     except PDFlibException as ex:
         print("PDFlib exception occurred:")
         print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))

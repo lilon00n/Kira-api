@@ -9,7 +9,6 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
     y = float(y)
     size = float(size)
     p = None
-    print("empiezo")
     try:
         p = PDFlib()
 
@@ -36,7 +35,6 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
         p.set_info("Creator", "PDFlib Cookbook")
         p.set_info("Title", title )
         
-        print("1")
         
         # Loop over all pages of the input document 
         for pageno in range(1, int(endpage)+1, 1): 
@@ -45,7 +43,6 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
             if page == -1: 
                 print("Error: " + p.get_errmsg())
                 next
-            print("2")
             # Start a new page 
             if not pageopen: 
                 p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
@@ -55,7 +52,6 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
             qint=len(intensities)
             retX=-1
             retY=-1
-            print("3")
             if sideX == "i":
                 if place=="T" or place=="B":
                     x=x-qcolors*qint*size
@@ -69,12 +65,9 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
                 elif place=="L" or place=="R":
                     y=y-qcolors*qint*size
                 retY=y
-            print("4")
             for color in colors: 
                 for i in intensities: 
-                    print("before intense")
                     intense=int(i)/100
-                    print(intense)
                     if "PANTONE" in color:
                         p.set_graphics_option("fillcolor={ spotname { " +color +  "} " + str(intense) +"}")
                     if color=="Cyan":
@@ -102,7 +95,6 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
                         p.rect(x, y+size , size, size)
                         x=x+size
                     p.fill()
-            print("5")
             if place=="L" or place=="R":
                 y=y-size
             else:
@@ -115,7 +107,6 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
             if sideY == "f":
                 y=y+size
                 retY=y 
-            print("6")
             p.fit_pdi_page(page, 0, pageheight,"")
 
             p.close_pdi_page(page)
@@ -124,12 +115,10 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
 
         p.close_pdi_document(indoc)
         
-        print("7")
         p.end_document("")
-        print("llego hasta aca")
         return (json.dumps({
-                retX:retX,
-                retY:retY,
+                "retX":retX,
+                "retY":retY,
             }))
     except PDFlibException as ex:
         print("PDFlib exception occurred:")
