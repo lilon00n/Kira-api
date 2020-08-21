@@ -63,13 +63,13 @@ def make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, 
                 p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
                 pageopen = True
         
-            p.set_graphics_option("fillcolor={spotname All 0.5} strokecolor={spotname All 0.5}");
+            p.set_graphics_option("fillcolor={spotname All 1} strokecolor={spotname All 1}");
 
             #Top left
             crop_mark = -1;
-            crop_mark = p.add_path_point(crop_mark, 0, int(dist_height), "move", "linewidth=1 stroke nofill strokecolor={gray 0}")
+            crop_mark = p.add_path_point(crop_mark, 0, int(dist_height), "move", "linewidth=0.1 stroke nofill")
             crop_mark = p.add_path_point(crop_mark, 0, int(size + dist_height), "line", "")
-            crop_mark = p.add_path_point(crop_mark, int(-dist_width), 0, "move", "linewidth=1 stroke nofill strokecolor={gray 0}")
+            crop_mark = p.add_path_point(crop_mark, int(-dist_width), 0, "move", "linewidth=0.1 stroke nofill")
             crop_mark = p.add_path_point(crop_mark, int(-size - dist_width), 0, "line", "")
             x = x_margin 
             y = y_margin
@@ -77,9 +77,9 @@ def make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, 
 
             #Top right
             crop_mark = -1;
-            crop_mark = p.add_path_point(crop_mark, 0, int(dist_height), "move", "linewidth=3 stroke nofill strokecolor={gray 0}")
+            crop_mark = p.add_path_point(crop_mark, 0, int(dist_height), "move", "linewidth=0.1 stroke nofill")
             crop_mark = p.add_path_point(crop_mark, 0, int(size + dist_height), "line", "")
-            crop_mark = p.add_path_point(crop_mark, int(dist_width), 0, "move", "linewidth=3 stroke nofill strokecolor={gray 0}")
+            crop_mark = p.add_path_point(crop_mark, int(dist_width), 0, "move", "linewidth=0.1 stroke nofill")
             crop_mark = p.add_path_point(crop_mark, int(size + dist_width), 0, "line", "")
             x = x_margin + width
             y = y_margin 
@@ -88,9 +88,9 @@ def make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, 
 
             #Bottom left
             crop_mark = -1;
-            crop_mark = p.add_path_point(crop_mark, 0, int(-dist_height), "move", "linewidth=3 stroke nofill strokecolor={gray 0}")
+            crop_mark = p.add_path_point(crop_mark, 0, int(-dist_height), "move", "linewidth=0.1 stroke nofill")
             crop_mark = p.add_path_point(crop_mark, 0, int(-size - dist_height), "line", "")
-            crop_mark = p.add_path_point(crop_mark, int(-dist_width), 0, "move", "linewidth=3 stroke nofill strokecolor={gray 0}")
+            crop_mark = p.add_path_point(crop_mark, int(-dist_width), 0, "move", "linewidth=0.1 stroke nofill")
             crop_mark = p.add_path_point(crop_mark, int(-size - dist_width), 0, "line", "")
             x = x_margin
             y = y_margin +height
@@ -99,9 +99,9 @@ def make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, 
 
             #Bottom right
             crop_mark = -1;
-            crop_mark = p.add_path_point(crop_mark, 0, int(-dist_height), "move", "linewidth=3 stroke nofill strokecolor={gray 0}")
+            crop_mark = p.add_path_point(crop_mark, 0, int(-dist_height), "move", "linewidth=0.1 stroke nofill strokecolor={gray 0}")
             crop_mark = p.add_path_point(crop_mark, 0, int(-size - dist_height), "line", "")
-            crop_mark = p.add_path_point(crop_mark, int(dist_width), 0, "move", "linewidth=3 stroke nofill strokecolor={gray 0}")
+            crop_mark = p.add_path_point(crop_mark, int(dist_width), 0, "move", "linewidth=0.1 stroke nofill strokecolor={gray 0}")
             crop_mark = p.add_path_point(crop_mark, int(size + dist_width), 0, "line", "")
             x = x_margin +width
             y = y_margin + height

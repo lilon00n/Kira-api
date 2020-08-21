@@ -22,7 +22,7 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
         for step in range(0, 2, 1):
             registration_mark = p.add_path_point(registration_mark,
                     radius, step * 90,
-                    "move", "stroke nofill strokecolor={spotname All 0.5} polar")
+                    "move", "stroke nofill strokecolor={spotname All 1} polar")
             registration_mark = p.add_path_point(registration_mark,
                     radius, (step + 2) * 90, "line", "polar")
         
@@ -30,7 +30,7 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
         #Inner circle
         registration_mark = p.add_path_point(registration_mark,
                 -radius / 3, 0, "move",
-                "fill nostroke strokecolor={spotname All 0.5} fillcolor={spotname All 0.5}")
+                "fill nostroke strokecolor={spotname All 1} fillcolor={spotname All 1}")
         registration_mark = p.add_path_point(registration_mark,
                 radius / 3, 0, "control", "")
         registration_mark = p.add_path_point(registration_mark,
@@ -46,7 +46,7 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
         #Outer circle
         registration_mark = p.add_path_point(registration_mark, -2
                 * radius / 3, 0, "move",
-                "stroke nofill strokecolor={spotname All 0.5}")
+                "stroke nofill strokecolor={spotname All 1}")
         registration_mark = p.add_path_point(registration_mark,
                 2 * radius / 3, 0, "control", "")
         registration_mark = p.add_path_point(registration_mark, -2
