@@ -31,11 +31,15 @@ def supportBar():
         searchpath= body["searchpath"]
         pdffile= body["pdffile"]
         outfile= body["outfile"] 
+        print(searchpath)
+        print(pdffile)
+        print(outfile)
         x= body["x"]
         y= body["y"] 
         width= body["width"]
         height= body["height"]
         make(searchpath, pdffile, outfile, x, y, width, height)
+        print("ok")
         return "ok"
 
 @app.route('/colorNames', methods=['POST'])
@@ -149,10 +153,13 @@ def rombos():
         pdffile= body["pdffile"]
         outfile= body["outfile"] 
         rombofile= body["rombofile"] 
+        print(searchpath)
+        print(pdffile)
+        print(rombofile)
         x= body["x"]
         y= body["y"] 
         
-        ret=make(searchpath, pdffile, outfile,rombofile, x, y)
+        make(searchpath, pdffile, outfile,rombofile, x, y)
         return "ok"
 
 app.run(host="0.0.0.0", port=8000, debug=True)

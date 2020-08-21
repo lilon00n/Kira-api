@@ -30,7 +30,8 @@ def make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, 
         p = PDFlib()
 
         p.set_option("searchpath={" + searchpath + "}")
-
+        p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
+        
         # This means we must check return values of load_font() etc. 
         p.set_option("errorpolicy=return")
         #Open the input PDF */
@@ -66,9 +67,9 @@ def make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, 
 
             #Top left
             crop_mark = -1;
-            crop_mark = p.add_path_point(crop_mark, 0, int(dist_height), "move", "linewidth=3 stroke nofill strokecolor={gray 0}")
+            crop_mark = p.add_path_point(crop_mark, 0, int(dist_height), "move", "linewidth=1 stroke nofill strokecolor={gray 0}")
             crop_mark = p.add_path_point(crop_mark, 0, int(size + dist_height), "line", "")
-            crop_mark = p.add_path_point(crop_mark, int(-dist_width), 0, "move", "linewidth=3 stroke nofill strokecolor={gray 0}")
+            crop_mark = p.add_path_point(crop_mark, int(-dist_width), 0, "move", "linewidth=1 stroke nofill strokecolor={gray 0}")
             crop_mark = p.add_path_point(crop_mark, int(-size - dist_width), 0, "line", "")
             x = x_margin 
             y = y_margin
