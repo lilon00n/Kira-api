@@ -39,7 +39,7 @@ def make(searchpath, pdffile, outfile, info, fsize,x,y,place,sideX,sideY):
         
         # Loop over all pages of the input document 
         for pageno in range(1, int(endpage)+1, 1): 
-            page = p.open_pdi_page(indoc, pageno, "")
+            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
 
             if page == -1: 
                 print("Error: " + p.get_errmsg())
@@ -47,9 +47,10 @@ def make(searchpath, pdffile, outfile, info, fsize,x,y,place,sideX,sideY):
             
             # Start a new page 
             if not pageopen: 
-                p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
+                p.begin_page_ext(float(pagewidth), float(pageheight), "")
                 pageopen = True
-
+            p.fit_pdi_page(page, 0, pageheight,"cloneboxes")
+            y= float(pageheight)-float(y)
             if place=="L":
                 angle=90
             elif place=="R":
@@ -75,43 +76,42 @@ def make(searchpath, pdffile, outfile, info, fsize,x,y,place,sideX,sideY):
 
             if sideY == "i":
                 if place=="B":
-                    y=y-totalH
+                    y=y+totalH
                 elif  place=="R":
-                    y=y-totalW
+                    y=y+totalW
                 elif place=="L":
-                    y=y-totalW
+                    y=y+totalW
                 retY=y
             else:
                 if place=="T":
-                    y=y+totalH
+                    y=y-totalH
             
             if place=="L":
                 if sideY == "i":
-                    p.fit_textline(info, x, y, optlist)
-                    y=y-totalW
+                    p.fit_textline(info, x, y-totalW, optlist)
                 else:
-                    p.fit_textline(info, x, y+totalW, optlist)
-                    y=y+totalW
-            elif place=="R":
-                if sideY == "i":
                     p.fit_textline(info, x, y-totalW, optlist)
                     y=y-totalW
-                else:
+            elif place=="R":
+                if sideY == "i":
                     p.fit_textline(info, x, y, optlist)
                     y=y+totalW
+                else:
+                    p.fit_textline(info, x, y, optlist)
+                    y=y-totalW
             elif place=="T":
                 if sideX == "i":  
-                    p.fit_textline(info, x-totalW, y, optlist)
+                    p.fit_textline(info, x, y, optlist)
                     x=x-totalW
                 else:  
                     p.fit_textline(info, x, y, optlist)
                     x=x+totalW
             else:
                 if sideX == "i":
-                    p.fit_textline(info, x-totalW, y+totalW, optlist)
+                    p.fit_textline(info, x, y-totalH, optlist)
                     x=x-totalW
                 else:    
-                    p.fit_textline(info, x, y+totalW, optlist)
+                    p.fit_textline(info, x, y-totalH, optlist)
                     x=x+totalW
 
             #p.fit_textline(info, x, y, optlist)
@@ -121,7 +121,7 @@ def make(searchpath, pdffile, outfile, info, fsize,x,y,place,sideX,sideY):
             if sideY == "f":
                 retY=y 
             
-            p.fit_pdi_page(page, 0, pageheight,"")
+            
 
             p.close_pdi_page(page)
         
@@ -134,7 +134,7 @@ def make(searchpath, pdffile, outfile, info, fsize,x,y,place,sideX,sideY):
 
         return (json.dumps({
                 "retX":retX,
-                "retY":retY,
+                "retY":float(pageheight)-retY,
             }))
     except PDFlibException as ex:
         print("PDFlib exception occurred:")

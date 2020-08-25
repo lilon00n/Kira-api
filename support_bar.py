@@ -40,7 +40,7 @@ def make(searchpath, pdffile, outfile, x, y, width, height,percent):
     
         # Loop over all pages of the input document 
         for pageno in range(1, int(endpage)+1, 1): 
-            page = p.open_pdi_page(indoc, pageno, "")
+            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
 
             if page == -1: 
                 print("Error: " + p.get_errmsg())
@@ -48,14 +48,14 @@ def make(searchpath, pdffile, outfile, x, y, width, height,percent):
             
             # Start a new page 
             if not pageopen: 
-                p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
+                p.begin_page_ext(float(pagewidth), float(pageheight), "")
                 pageopen = True
 
+            p.fit_pdi_page(page, 0, pageheight,"cloneboxes")
             p.set_graphics_option("fillcolor={spotname All "+percent+"} strokecolor={spotname All "+percent+"}");
             p.moveto(0, 0);
-            p.rect(float(x), float(y), float(width), float(height));
+            p.rect(float(x), float(pageheight)-float(y), float(width), float(height));
             p.fill();
-            p.fit_pdi_page(page, 0, pageheight,"")
 
             p.close_pdi_page(page)
         

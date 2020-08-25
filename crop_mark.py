@@ -54,7 +54,7 @@ def make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, 
         
         # Loop over all pages of the input document 
         for pageno in range(1, int(endpage)+1, 1): 
-            page = p.open_pdi_page(indoc, pageno, "")
+            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
         
             if page == -1: 
                 print("Error: " + p.get_errmsg())
@@ -62,10 +62,10 @@ def make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, 
             
             # Start a new page 
             if not pageopen: 
-                p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
+                p.begin_page_ext(float(pagewidth), float(pageheight), "")
                 pageopen = True
-            
-            p.fit_pdi_page(page, 0, pageheight,"")
+            y_margin= float(pageheight)-float(y_margin)
+            p.fit_pdi_page(page, 0, pageheight,"cloneboxes")
         
             p.set_graphics_option("linewidth="+weight+" fillcolor={spotname All 1} strokecolor={spotname All 1}");
 
@@ -97,7 +97,7 @@ def make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, 
             crop_mark = p.add_path_point(crop_mark, int(-dist_width), 0, "move", "stroke nofill")
             crop_mark = p.add_path_point(crop_mark, int(-size - dist_width), 0, "line", "")
             x = x_margin
-            y = y_margin +height
+            y = y_margin -height
             draw_corner(p, x, y, crop_mark)
 
 
@@ -108,7 +108,7 @@ def make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, 
             crop_mark = p.add_path_point(crop_mark, int(dist_width), 0, "move", "stroke nofill strokecolor={gray 0}")
             crop_mark = p.add_path_point(crop_mark, int(size + dist_width), 0, "line", "")
             x = x_margin +width
-            y = y_margin + height
+            y = y_margin - height
             draw_corner(p, x, y, crop_mark)
 
             

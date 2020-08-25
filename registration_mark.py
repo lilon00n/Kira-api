@@ -92,7 +92,7 @@ def make(searchpath, pdffile, outfile, x, y, crop_size,weight):
         
         # Loop over all pages of the input document 
         for pageno in range(1, int(endpage)+1, 1): 
-            page = p.open_pdi_page(indoc, pageno, "")
+            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
 
             if page == -1: 
                 print("Error: " + p.get_errmsg())
@@ -100,9 +100,11 @@ def make(searchpath, pdffile, outfile, x, y, crop_size,weight):
             
             # Start a new page 
             if not pageopen: 
-                p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
+                p.begin_page_ext(float(pagewidth), float(pageheight), "")
                 pageopen = True
-            p.fit_pdi_page(page, 0, pageheight,"")
+
+            y= float(pageheight)-float(y)
+            p.fit_pdi_page(page, 0, pageheight,"cloneboxes")
 
             p.set_graphics_option("fillcolor={spotname All 0.5} strokecolor={spotname All 0.5} linewidth="+weight)
             registration_mark = create_registration_mark(p, int(crop_size))

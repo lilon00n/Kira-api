@@ -63,7 +63,7 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
         
         # Loop over all pages of the input document 
         for pageno in range(1, int(endpage)+1, 1): 
-            page = p.open_pdi_page(indoc, pageno, "")
+            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
 
             if page == -1: 
                 print("Error: " + p.get_errmsg())
@@ -71,11 +71,11 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
             
             # Start a new page 
             if not pageopen: 
-                p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
+                p.begin_page_ext(float(pagewidth), float(pageheight), "")
                 pageopen = True
 
-            p.fit_pdi_page(page, 0, pageheight,"")
-
+            p.fit_pdi_page(page, 0, pageheight,"cloneboxes")
+            y= float(pageheight)-float(y)
             p.set_graphics_option("fillcolor={spotname All 0.5} strokecolor={spotname All 0.5}")
             micropoint = create_micropoint(p, crop_size)
             draw_corner(p, 0, x, y,  micropoint)

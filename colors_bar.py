@@ -39,16 +39,17 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
         
         # Loop over all pages of the input document 
         for pageno in range(1, int(endpage)+1, 1): 
-            page = p.open_pdi_page(indoc, pageno, "")
+            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
 
             if page == -1: 
                 print("Error: " + p.get_errmsg())
                 next
             # Start a new page 
             if not pageopen: 
-                p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
+                p.begin_page_ext(float(pagewidth), float(pageheight), "")
                 pageopen = True
-            p.fit_pdi_page(page, 0, pageheight,"")
+            y= float(pageheight)-float(y)
+            p.fit_pdi_page(page, 0, pageheight,"cloneboxes")
             qcolors=len(colors)
             qint=len(intensities)
             retX=-1
@@ -62,9 +63,9 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
 
             if sideY == "i":
                 if place=="T" or place=="B":
-                    y=y-size
+                    y=y+size
                 elif place=="L" or place=="R":
-                    y=y-qcolors*qint*size
+                    y=y+qcolors*qint*size
                 retY=y
             for color in colors: 
                 for i in intensities: 
@@ -87,17 +88,17 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
                         p.set_graphics_option("fillcolor={ rgb 0 0 " + str(intense) + " }")
                     
                     if place=="L" or place=="R":
-                        p.rect(x, y+size, size, size)
-                        y=y+size
+                        p.rect(x, y-size, size, size)
+                        y=y-size
                     elif place=="T":
-                        p.rect(x, y+size, size, size)
+                        p.rect(x, y-size, size, size)
                         x=x+size
                     else:
-                        p.rect(x, y+size , size, size)
+                        p.rect(x, y-size , size, size)
                         x=x+size
                     p.fill()
             if place=="L" or place=="R":
-                y=y-size
+                y=y+size
             else:
                 x=x-size
             
@@ -106,7 +107,7 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
                 retX=x 
             
             if sideY == "f":
-                y=y+size
+                y=y-size
                 retY=y 
             
 
@@ -119,7 +120,7 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
         p.end_document("")
         return (json.dumps({
                 "retX":retX,
-                "retY":retY,
+                "retY":float(pageheight)-retY,
             }))
     except PDFlibException as ex:
         print("PDFlib exception occurred:")

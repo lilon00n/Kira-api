@@ -43,20 +43,18 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
         p.set_info("Creator", "PDFlib Cookbook")
         p.set_info("Title", title )
         
-        print("Aca1")
         # Loop over all pages of the input document 
         for pageno in range(1, int(endpage)+1, 1): 
-            page = p.open_pdi_page(indoc, pageno, "")
+            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
 
             if page == -1: 
                 print("Error: " + p.get_errmsg())
                 next
-            print("Aca2")
             # Start a new page 
             if not pageopen: 
-                p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
+                p.begin_page_ext(float(pagewidth), float(pageheight), "")
                 pageopen = True
-            p.fit_pdi_page(page, 0, pageheight,"")
+            p.fit_pdi_page(page, 0, pageheight,"cloneboxes")
             if place=="L":
                 angle=90
             elif place=="R":
@@ -69,6 +67,7 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
             optlist = "fontname=Helvetica fontsize=" + str(fsize)+ " encoding=unicode rotate="+ str(angle)
             totalW = p.info_textline(colorNames, "width", optlist)
             totalH = p.info_textline(colorNames, "height", optlist)
+            y= float(pageheight)-float(y)
             if sideX == "i":
                 if place=="T" or place=="B":
                     x=x-totalW
@@ -82,15 +81,15 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
 
             if sideY == "i":
                 if place=="B":
-                    y=y-totalH
+                    y=y+totalH
                 elif  place=="R":
-                    y=y-totalW
+                    y=y+totalW
                 elif place=="L":
-                    y=y-totalW
+                    y=y+totalW
                 retY=y
             else:
                 if place=="T":
-                    y=y+totalH
+                    y=y-totalH
             for color in colors: 
                 if "PANTONE" in color:
                     optlist = "fontname=Helvetica fontsize=" + str(fsize)+ " encoding=unicode rotate="+ str(angle) + " fillcolor={ spotname { " + color  +"} 1}"
@@ -104,17 +103,17 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
                 if place=="L":
                     if sideY == "i":
                         p.fit_textline(textline, x, y, optlist)
-                        y=y-textwidth
-                    else:
-                        p.fit_textline(textline, x, y+textwidth, optlist)
                         y=y+textwidth
-                elif place=="R":
-                    if sideY == "i":
+                    else:
                         p.fit_textline(textline, x, y-textwidth, optlist)
                         y=y-textwidth
+                elif place=="R":
+                    if sideY == "i":
+                        p.fit_textline(textline, x, y+textwidth, optlist)
+                        y=y+textwidth
                     else:
                         p.fit_textline(textline, x, y, optlist)
-                        y=y+textwidth
+                        y=y-textwidth
                 elif place=="T":
                     if sideX == "i":  
                         p.fit_textline(textline, x-textwidth, y, optlist)
@@ -124,10 +123,10 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
                         x=x+textwidth
                 else:
                     if sideX == "i":
-                        p.fit_textline(textline, x-textwidth, y+textheight, optlist)
+                        p.fit_textline(textline, x-textwidth, y-textheight, optlist)
                         x=x-textwidth
                     else:    
-                        p.fit_textline(textline, x, y+textheight, optlist)
+                        p.fit_textline(textline, x, y-textheight, optlist)
                         x=x+textwidth
                         
                     
@@ -153,7 +152,7 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
         
         return (json.dumps({
                 "retX":retX,
-                "retY":retY,
+                "retY":float(pageheight)-retY,
             }))
     except PDFlibException as ex:
         print("PDFlib exception occurred:")
