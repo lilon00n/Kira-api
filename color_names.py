@@ -56,7 +56,7 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
             if not pageopen: 
                 p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
                 pageopen = True
-            
+            p.fit_pdi_page(page, 0, pageheight,"")
             if place=="L":
                 angle=90
             elif place=="R":
@@ -140,7 +140,7 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
             #retX=x 
             #retY=y 
 
-            p.fit_pdi_page(page, 0, pageheight,"")
+            
 
             p.close_pdi_page(page)
         

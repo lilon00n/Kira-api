@@ -31,14 +31,12 @@ def supportBar():
         searchpath= body["searchpath"]
         pdffile= body["pdffile"]
         outfile= body["outfile"] 
-        print(searchpath)
-        print(pdffile)
-        print(outfile)
         x= body["x"]
         y= body["y"] 
         width= body["width"]
         height= body["height"]
-        make(searchpath, pdffile, outfile, x, y, width, height)
+        percent= body["percent"]
+        make(searchpath, pdffile, outfile, x, y, width, height,percent)
         print("ok")
         return "ok"
 
@@ -94,7 +92,11 @@ def cropMark():
         height= body["height"]
         dist_width= body["dist_width"]
         dist_height= body["dist_height"]
-        ret=make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, dist_width, dist_height)
+        weight= body["weight"]
+        print(searchpath)
+        print(pdffile)
+        print(outfile)
+        ret=make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, dist_width, dist_height,weight)
         return "ok"
 
 @app.route('/registrationMark', methods=['POST'])
@@ -108,8 +110,9 @@ def registrationMark():
         x= body["x"]
         y= body["y"] 
         crop_size= body["crop_size"]
+        weight= body["weight"]
 
-        ret=make(searchpath, pdffile, outfile, x, y, crop_size)
+        ret=make(searchpath, pdffile, outfile, x, y, crop_size,weight)
         return "ok"
 
 @app.route('/info', methods=['POST'])

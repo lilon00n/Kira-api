@@ -2,7 +2,7 @@ import sys
 import json
 from PDFlib.PDFlib import *
 
-def make(searchpath, pdffile, outfile, x, y, crop_size):
+def make(searchpath, pdffile, outfile, x, y, crop_size,weight):
 
     title = "Marcas de corte"
     #searchpath = sys.argv[1]
@@ -10,6 +10,7 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
     #outfile = sys.argv[3]
     x = float(x)
     y = float(y)
+    weight = str(weight)
     crop_size = float(crop_size)
 
 
@@ -101,13 +102,13 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
             if not pageopen: 
                 p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
                 pageopen = True
+            p.fit_pdi_page(page, 0, pageheight,"")
 
-            p.set_graphics_option("fillcolor={spotname All 0.5} strokecolor={spotname All 0.5}")
+            p.set_graphics_option("fillcolor={spotname All 0.5} strokecolor={spotname All 0.5} linewidth="+weight)
             registration_mark = create_registration_mark(p, int(crop_size))
             draw_corner(p, 0, x, y,  registration_mark)
             
             
-            p.fit_pdi_page(page, 0, pageheight,"")
 
             p.close_pdi_page(page)
         

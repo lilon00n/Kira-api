@@ -1,7 +1,7 @@
 import sys
 from PDFlib.PDFlib import *
 
-def make(searchpath, pdffile, outfile, x, y, width, height):
+def make(searchpath, pdffile, outfile, x, y, width, height,percent):
     title = "Barra de soporte"
     #searchpath = sys.argv[1]
     #pdffile = sys.argv[2]
@@ -10,7 +10,8 @@ def make(searchpath, pdffile, outfile, x, y, width, height):
     #y = sys.argv[5]
     #width = sys.argv[6]
     #height = sys.argv[7]
-
+    percent=str(percent)
+    print(percent)
     p = None
 
     try:
@@ -50,7 +51,7 @@ def make(searchpath, pdffile, outfile, x, y, width, height):
                 p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
                 pageopen = True
 
-            p.set_graphics_option("fillcolor={spotname All 0.5} strokecolor={spotname All 0.5}");
+            p.set_graphics_option("fillcolor={spotname All "+percent+"} strokecolor={spotname All "+percent+"}");
             p.moveto(0, 0);
             p.rect(float(x), float(y), float(width), float(height));
             p.fill();

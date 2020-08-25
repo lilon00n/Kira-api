@@ -48,7 +48,7 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
             if not pageopen: 
                 p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
                 pageopen = True
-
+            p.fit_pdi_page(page, 0, pageheight,"")
             qcolors=len(colors)
             qint=len(intensities)
             retX=-1
@@ -108,7 +108,7 @@ def make(searchpath, pdffile, outfile, colors,intensities,size,x,y,place,sideX,s
             if sideY == "f":
                 y=y+size
                 retY=y 
-            p.fit_pdi_page(page, 0, pageheight,"")
+            
 
             p.close_pdi_page(page)
         
