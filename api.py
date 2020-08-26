@@ -144,7 +144,8 @@ def micropoint():
         outfile= body["outfile"] 
         x= body["x"]
         y= body["y"] 
-        ret=make(searchpath, pdffile, outfile, x, y,0.3)
+        size= body["size"] 
+        ret=make(searchpath, pdffile, outfile, x, y,size)
         return "ok"
 
 @app.route('/rombos', methods=['POST'])

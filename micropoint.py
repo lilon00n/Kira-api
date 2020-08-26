@@ -4,7 +4,7 @@ from PDFlib.PDFlib import *
 
 def make(searchpath, pdffile, outfile, x, y, crop_size):
     title = "Marcas de corte"
-    crop_size = 0.3
+
 
     x = float(x)
     y = float(y)
@@ -15,14 +15,14 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
         micropoint = -1;
 
         #Outer circle
-        micropoint = p.add_path_point(micropoint, -2 * radius / 2.445, 0, "move",  "linewidth=0.01 fill nostroke fillcolor={gray 1}")
-        micropoint = p.add_path_point(micropoint,  2 * radius / 2.445, 0, "control", "")
-        micropoint = p.add_path_point(micropoint, -2* radius / 2.445, 0, "circular", "")
+        micropoint = p.add_path_point(micropoint, - radius / 0.3514729, 0, "move",  "linewidth=0.01 fill nostroke fillcolor={gray 1}")
+        micropoint = p.add_path_point(micropoint,   radius / 0.3514729, 0, "control", "")
+        micropoint = p.add_path_point(micropoint, - radius / 0.3514729, 0, "circular", "")
 
         #Inner circle
-        micropoint = p.add_path_point(micropoint, -radius / 3, 0, "move",  "fill nostroke strokecolor={spotname All 0.5} fillcolor={spotname All 0.5}")
-        micropoint = p.add_path_point(micropoint, radius / 3, 0, "control", "")
-        micropoint = p.add_path_point(micropoint, -radius / 3, 0, "circular", "")
+        micropoint = p.add_path_point(micropoint, -(radius/2) / 0.3514729, 0, "move",  "fill nostroke strokecolor={spotname All 0.5} fillcolor={spotname All 0.5}")
+        micropoint = p.add_path_point(micropoint, (radius/2) / 0.3514729, 0, "control", "")
+        micropoint = p.add_path_point(micropoint, -(radius/2) / 0.3514729, 0, "circular", "")
         
         return micropoint
 
