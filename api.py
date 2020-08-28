@@ -30,7 +30,10 @@ def supportBar():
         body=request.get_json()
         searchpath= body["searchpath"]
         pdffile= body["pdffile"]
-        outfile= body["outfile"] 
+        outfile= body["outfile"]
+        print(searchpath) 
+        print(pdffile) 
+        print(outfile) 
         x= body["x"]
         y= body["y"] 
         width= body["width"]
