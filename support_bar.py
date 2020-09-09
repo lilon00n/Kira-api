@@ -11,7 +11,6 @@ def make(searchpath, pdffile, outfile, x, y, width, height,percent):
     #width = sys.argv[6]
     #height = sys.argv[7]
     percent=str(percent)
-    print(percent)
     p = None
 
     try:

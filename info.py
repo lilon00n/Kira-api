@@ -58,7 +58,7 @@ def make(searchpath, pdffile, outfile, info, fsize,x,y,place,sideX,sideY):
             else:
                 angle=0
 
-            optlist = "fontname=Helvetica fontsize=" + str(fsize) + " encoding=unicode rotate=" + str(angle) + " fillcolor={ spotname ALL 1}"
+            optlist = "fontname=Helvetica fontsize=" + str(fsize) + " encoding=unicode rotate=" + str(angle) + " fillcolor={ spotname All 1}"
             totalW = p.info_textline(info, "width", optlist)
             totalH = p.info_textline(info, "height", optlist)
             retX=-1
