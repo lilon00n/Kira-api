@@ -1,8 +1,8 @@
 
+import json
 from flask import Flask, request, jsonify
 app = Flask(__name__)
 app.config["DEBUG"] = True
-
 
 @app.route('/', methods=['GET'])
 def home():
@@ -157,6 +157,21 @@ def rombos():
         y= body["y"] 
         
         make(searchpath, pdffile, outfile,rombofile, x, y)
+        return "ok"
+
+@app.route('/oneUp', methods=['POST'])
+def makeOneUp():
+    from  one_up import make
+    if request.method == 'POST':
+        body=request.get_json()
+        searchpath= body["searchpath"]
+        pdffile= body["pdffile"]
+        outfile= body["outfile"] 
+        boxes= json.dumps(body["boxes"])
+        colors= body["colors"] 
+        percentages= body["percentages"] 
+        info= json.dumps(body["info"])
+        make(searchpath, pdffile, outfile, boxes,colors,percentages,info)
         return "ok"
 
 app.run(host="0.0.0.0", port=8000, debug=True)

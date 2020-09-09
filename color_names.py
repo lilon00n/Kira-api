@@ -22,7 +22,7 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
         p = PDFlib()
 
         p.set_option("searchpath={" + searchpath + "}")
-        p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
+        #p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
         
         # This means we must check return values of load_font() etc. 
         p.set_option("errorpolicy=return")
@@ -92,9 +92,9 @@ def make(searchpath, pdffile, outfile, colors, fsize,x,y,place,sideX,sideY):
                     y=y-totalH
             for color in colors: 
                 if "PANTONE" in color:
-                    optlist = "fontname=Helvetica fontsize=" + str(fsize)+ " encoding=unicode rotate="+ str(angle) + " fillcolor={ spotname { " + color  +"} 1}"
+                    optlist = "fontname=Helvetica fontsize=" + str(fsize)+ " encoding=unicode rotate="+ str(angle) + " fillcolor={ spotname {" + color  +"} 1}"
                 else:
-                    optlist = "fontname=Helvetica fontsize=" + str(fsize)+ " encoding=unicode rotate="+ str(angle) + " fillcolor={ " + color  +"}"
+                    optlist = "fontname=Helvetica fontsize=" + str(fsize)+ " encoding=unicode rotate="+ str(angle) + " fillcolor={ " + color  +" }"
                 
                 textline = color;
                 textwidth = p.info_textline(textline, "width", optlist);
