@@ -245,7 +245,6 @@ def make(searchpath, pdffile, outfile, boxes,colors,percentages,info):
 
         
         wCotaWidth = p.info_textline(textCotaW, "width", optlist)
-        wCotaHeight = p.info_textline(textCotaW, "height", optlist)
         hCotaWidth = p.info_textline(textCotaW, "width", optlist+" rotate=90")
         hCotaHeight = p.info_textline(textCotaW, "height", optlist+" rotate=90")
 
@@ -263,6 +262,12 @@ def make(searchpath, pdffile, outfile, boxes,colors,percentages,info):
         p.lineto(mediaExcess+cropExcess+addInfo+trimW, mediaExcess+rotuloHeight+cropExcess+trimH+separation)
         p.stroke()
         
+        #Fondo de texto
+        p.set_graphics_option("fillcolor={ gray 1}")
+        p.rect(medX-wCotaWidth/2, mediaExcess+rotuloHeight+cropExcess+trimH+separation,wCotaWidth, textHeight )
+        p.fill()
+
+        p.set_graphics_option("strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}" )
         p.fit_textline(textCotaW, medX-wCotaWidth/2, mediaExcess+rotuloHeight+cropExcess+trimH+separation, optlist)
         
         optlist=optlist+" rotate=90"
@@ -271,7 +276,11 @@ def make(searchpath, pdffile, outfile, boxes,colors,percentages,info):
         p.lineto(mediaExcess+cropExcess+addInfo-separation, mediaExcess+rotuloHeight+cropExcess+trimH)
         p.stroke()
         
-        
+        #Fondo de texto
+        p.set_graphics_option("fillcolor={ gray 1}")
+        p.rect(mediaExcess+cropExcess+addInfo-separation-textHeight, medY-hCotaWidth/2,textHeight, wCotaWidth )
+        p.fill()
+        p.set_graphics_option("strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}")
         p.fit_textline(textCotaH,mediaExcess+cropExcess+addInfo-separation, medY-hCotaWidth/2, optlist)
 
         xGen= mediaExcess+cropExcess + nalawidth + maxColor +10;
