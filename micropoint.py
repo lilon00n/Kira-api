@@ -5,8 +5,6 @@ from PDFlib.PDFlib import *
 def make(searchpath, pdffile, outfile, x, y, crop_size):
     title = "Marcas de corte"
 
-    print(x)
-    print(y)
     x = float(x)
     y = float(y)
     crop_size = float(crop_size)

@@ -31,16 +31,12 @@ def supportBar():
         searchpath= body["searchpath"]
         pdffile= body["pdffile"]
         outfile= body["outfile"]
-        print(searchpath) 
-        print(pdffile) 
-        print(outfile) 
         x= body["x"]
         y= body["y"] 
         width= body["width"]
         height= body["height"]
         percent= body["percent"]
         make(searchpath, pdffile, outfile, x, y, width, height,percent)
-        print("ok")
         return "ok"
 
 @app.route('/colorNames', methods=['POST'])
@@ -96,9 +92,6 @@ def cropMark():
         dist_width= body["dist_width"]
         dist_height= body["dist_height"]
         weight= body["weight"]
-        print(searchpath)
-        print(pdffile)
-        print(outfile)
         ret=make(searchpath, pdffile, outfile, x_margin, y_margin, size, width, height, dist_width, dist_height,weight)
         return "ok"
 
@@ -160,9 +153,6 @@ def rombos():
         pdffile= body["pdffile"]
         outfile= body["outfile"] 
         rombofile= body["rombofile"] 
-        print(searchpath)
-        print(pdffile)
-        print(rombofile)
         x= body["x"]
         y= body["y"] 
         
