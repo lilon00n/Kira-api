@@ -159,6 +159,7 @@ def make(searchpath, pdffile, outfile, boxes,colors,percentages,info):
         colorSize=7
         fsize=8
         separation=4
+        cotaSeparation=4*72/25.4 #12mm del trim, 
         bleedExcess=5*72/25.4 #5mm
         cropExcess=crop_size*72/25.4 #8mm
         mediaExcess=5*72/25.4 #5mm
@@ -220,14 +221,18 @@ def make(searchpath, pdffile, outfile, boxes,colors,percentages,info):
         
         mediaWidth=max(widths)+cropExcess*2+mediaExcess*2
         mediaHeigth=trimH+cropExcess*2+mediaExcess*2+rotuloHeight
+        general = p.define_layer("General", "defaultstate=true")
         # Start a new page 
         if not pageopen: 
             p.begin_page_ext(mediaWidth, mediaHeigth,"trimbox="+trimbox+" bleedbox="+bleedbox+" cropbox="+cropbox)
             pageopen = True
 
-        
+        p.begin_layer(general)
         #unitario
         p.fit_pdi_page(page, mediaExcess+cropExcess+addInfo+despX, mediaExcess+rotuloHeight+cropExcess+despY,"")
+
+        layerMarks = p.define_layer("Marks", "")
+        p.begin_layer(layerMarks)
         #imagen nalav
         p.fit_pdi_page(nalapage, mediaExcess+cropExcess, mediaExcess+rotuloHeight-nalaheight,"scale={0.6 0.6}")
 
@@ -258,30 +263,30 @@ def make(searchpath, pdffile, outfile, boxes,colors,percentages,info):
         
         # Dibujo cotas
         #Superior
-        p.moveto(mediaExcess+cropExcess+addInfo, mediaExcess+rotuloHeight+cropExcess+trimH+separation)
-        p.lineto(mediaExcess+cropExcess+addInfo+trimW, mediaExcess+rotuloHeight+cropExcess+trimH+separation)
+        p.moveto(mediaExcess+cropExcess+addInfo, mediaExcess+rotuloHeight+cropExcess+trimH+cotaSeparation)
+        p.lineto(mediaExcess+cropExcess+addInfo+trimW, mediaExcess+rotuloHeight+cropExcess+trimH+cotaSeparation)
         p.stroke()
         
         #Fondo de texto
         p.set_graphics_option("fillcolor={ gray 1}")
-        p.rect(medX-wCotaWidth/2, mediaExcess+rotuloHeight+cropExcess+trimH+separation,wCotaWidth, textHeight )
+        p.rect(medX-wCotaWidth/2, mediaExcess+rotuloHeight+cropExcess+trimH+cotaSeparation,wCotaWidth, textHeight )
         p.fill()
 
         p.set_graphics_option("strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}" )
-        p.fit_textline(textCotaW, medX-wCotaWidth/2, mediaExcess+rotuloHeight+cropExcess+trimH+separation, optlist)
+        p.fit_textline(textCotaW, medX-wCotaWidth/2, mediaExcess+rotuloHeight+cropExcess+trimH+cotaSeparation, optlist)
         
         optlist=optlist+" rotate=90"
         #Izquierda
-        p.moveto(mediaExcess+cropExcess+addInfo-separation, mediaExcess+rotuloHeight+cropExcess)
-        p.lineto(mediaExcess+cropExcess+addInfo-separation, mediaExcess+rotuloHeight+cropExcess+trimH)
+        p.moveto(mediaExcess+cropExcess+addInfo-cotaSeparation, mediaExcess+rotuloHeight+cropExcess)
+        p.lineto(mediaExcess+cropExcess+addInfo-cotaSeparation, mediaExcess+rotuloHeight+cropExcess+trimH)
         p.stroke()
         
         #Fondo de texto
         p.set_graphics_option("fillcolor={ gray 1}")
-        p.rect(mediaExcess+cropExcess+addInfo-separation-textHeight, medY-hCotaWidth/2,textHeight, wCotaWidth )
+        p.rect(mediaExcess+cropExcess+addInfo-cotaSeparation-textHeight, medY-hCotaWidth/2,textHeight, wCotaWidth )
         p.fill()
         p.set_graphics_option("strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}")
-        p.fit_textline(textCotaH,mediaExcess+cropExcess+addInfo-separation, medY-hCotaWidth/2, optlist)
+        p.fit_textline(textCotaH,mediaExcess+cropExcess+addInfo-cotaSeparation, medY-hCotaWidth/2, optlist)
 
         xGen= mediaExcess+cropExcess + nalawidth + maxColor +10;
         yGen=mediaExcess+rotuloHeight
@@ -477,6 +482,7 @@ def make(searchpath, pdffile, outfile, boxes,colors,percentages,info):
             p.fit_textline(mm["material"], xGen+2, y, optlist)
             y=y-textHeight-4
   
+        p.end_layer()
         p.close_pdi_page(page)  
         p.end_page_ext("")
         p.close_pdi_document(indoc)
