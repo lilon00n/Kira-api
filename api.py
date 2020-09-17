@@ -169,9 +169,8 @@ def makeOneUp():
         outfile= body["outfile"] 
         boxes= json.dumps(body["boxes"])
         colors= body["colors"] 
-        percentages= body["percentages"] 
         info= json.dumps(body["info"])
-        make(searchpath, pdffile, outfile, boxes,colors,percentages,info)
+        make(searchpath, pdffile, outfile, boxes,colors,info)
         return "ok"
 
 app.run(host="0.0.0.0", port=8000, debug=True)
