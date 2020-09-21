@@ -4,59 +4,11 @@ import json
 from PDFlib.PDFlib import *
 
 
-def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
+def make(searchpath, pdffile, outfile, boxes, colors, percentages, info):
     title = "Nombre de colores"
     p = None
     info = json.loads(info)
     boxes = json.loads(boxes)
-
-    def make_devicen(colors):
-        strColors = ""
-        transformFuncN = "%Device N \n"
-
-        n = len(colors)
-        k = n + n*3 - 1
-        adds = n-1
-
-        for color in colors:
-            transformFuncN = transformFuncN + str(color["l"]) + " " + str(
-                color["a"]) + " " + str(color["ba"]) + " % kcolor: "+color["name"]+" \n"
-
-            strColors = strColors+"{"+color["name"]+"} "
-
-        transformFuncN = transformFuncN+"% Blend L values\n"
-        for x in range(n):
-            transformFuncN = transformFuncN + \
-                str(k)+" index " + str(n*3-2*x) + " index mul \n"
-
-        for x in range(adds):
-            transformFuncN = transformFuncN+"add "
-        transformFuncN = transformFuncN+"\n"
-        transformFuncN = transformFuncN+str(k+2)+" 1 roll % Bottom: L\n"
-        transformFuncN = transformFuncN+"% Blend a values\n"
-        for x in range(n):
-            transformFuncN = transformFuncN + \
-                str(k)+" index " + str((n*3-1)-2*x) + " index mul \n"
-        for x in range(adds):
-            transformFuncN = transformFuncN+"add "
-        transformFuncN = transformFuncN+"\n"
-        transformFuncN = transformFuncN+str(k+2)+" 1 roll % Bottom: a\n"
-        transformFuncN = transformFuncN+"% Blend b values\n"
-        for x in range(n):
-            transformFuncN = transformFuncN + \
-                str(k)+" index " + str((n*3-2)-2*x) + " index mul \n"
-        for x in range(adds):
-            transformFuncN = transformFuncN+"add "
-        transformFuncN = transformFuncN+"\n"
-        transformFuncN = transformFuncN+str(k+2)+" 1 roll % Bottom: b\n"
-        pops = k+1
-        for x in range(pops):
-            transformFuncN = transformFuncN+"pop "
-        transformFuncN = transformFuncN+"\n"
-
-        devicen = p.create_devicen(
-            "names={"+strColors+"} alternate=lab transform={{" + transformFuncN + "}} ")
-        return devicen
 
     def draw_corner(p, x, y, crop_mark, weight):
         p.save()
@@ -65,7 +17,8 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         p.restore()
 
     def draw_crop_marks(p, x_margin, y_margin, size, weight, dist_height, dist_width, width, height):
-        p.set_graphics_option("linewidth="+str(weight))
+        p.set_graphics_option(
+            "linewidth="+str(weight)+" fillcolor={spotname All 1} strokecolor={spotname All 1}")
 
         # Top left
         crop_mark = -1
@@ -112,11 +65,11 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         # Bottom right
         crop_mark = -1
         crop_mark = p.add_path_point(
-            crop_mark, 0, int(-dist_height), "move", "stroke nofill")
+            crop_mark, 0, int(-dist_height), "move", "stroke nofill strokecolor={gray 0}")
         crop_mark = p.add_path_point(
             crop_mark, 0, int(-size - dist_height), "line", "")
         crop_mark = p.add_path_point(crop_mark, int(
-            dist_width), 0, "move", "stroke nofill")
+            dist_width), 0, "move", "stroke nofill strokecolor={gray 0}")
         crop_mark = p.add_path_point(
             crop_mark, int(size + dist_width), 0, "line", "")
         x = x_margin + width
@@ -129,14 +82,14 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         for step in range(0, 2, 1):
             registration_mark = p.add_path_point(registration_mark,
                                                  radius, step * 90,
-                                                 "move", "stroke nofill  polar")
+                                                 "move", "stroke nofill strokecolor={spotname All 1} polar")
             registration_mark = p.add_path_point(registration_mark,
                                                  radius, (step + 2) * 90, "line", "polar")
 
         # Inner circle
         registration_mark = p.add_path_point(registration_mark,
                                              -radius / 3, 0, "move",
-                                             "fill nostroke ")
+                                             "fill nostroke strokecolor={spotname All 1} fillcolor={spotname All 1}")
         registration_mark = p.add_path_point(registration_mark,
                                              radius / 3, 0, "control", "")
         registration_mark = p.add_path_point(registration_mark,
@@ -152,7 +105,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         # Outer circle
         registration_mark = p.add_path_point(registration_mark, -2
                                              * radius / 3, 0, "move",
-                                             "stroke nofill ")
+                                             "stroke nofill strokecolor={spotname All 1}")
         registration_mark = p.add_path_point(registration_mark,
                                              2 * radius / 3, 0, "control", "")
         registration_mark = p.add_path_point(registration_mark, -2
@@ -170,8 +123,6 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
 
         searchnalapath = './data'
         p.set_option("searchpath={" + searchnalapath + "}")
-        p.set_option(
-            "logging {filename {/Users/aldanaveronruizdiaz/TRABAJOS/PDFlib.log}}")
         # Open the input PDF */
         nalapdf = p.open_pdi_document('nala-rotulo.pdf', "")
         if nalapdf == -1:
@@ -179,7 +130,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
             next
 
         p.set_option("searchpath={" + searchpath + "}")
-        p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
+        # p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
 
         # This means we must check return values of load_font() etc.
         p.set_option("errorpolicy=return")
@@ -229,7 +180,6 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         cropExcess = crop_size*72/25.4  # 8mm
         mediaExcess = 5*72/25.4  # 5mm
         materialMachines = info["materialMachines"]
-        devicen = make_devicen(colorsJson)
 
         # Defino alto del rotulo
         optlist = "fontname=Arial fontsize=" + str(fsize) + " encoding=unicode"
@@ -239,7 +189,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         machinewidth = p.info_textline("Maquina:", "width", optlist)
         heights = []
 
-        colorsHeight = len(colorsJson)*(textHeight+8)
+        colorsHeight = len(colors)*(textHeight+8)
         matMachHeight = len(materialMachines)*2*(textHeight+4)
 
         heights.append(nalaheight)
@@ -252,11 +202,10 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         # Chequeo donde comenzar a escribir los colores
 
         maxColor = 0
-        for color in colorsJson:
-            textwidth = p.info_textline(color["name"], "width", optlist)
+        for color in colors:
+            textwidth = p.info_textline(color, "width", optlist)
             if textwidth > maxColor:
                 maxColor = textwidth
-
         maxInfo = 0
         for index, key in enumerate(keys, start=0):
             textwidth = p.info_textline(info[key], "width", optlist)
@@ -290,29 +239,20 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
 
         mediaWidth = max(widths)+cropExcess*2+mediaExcess*2
         mediaHeigth = trimH+cropExcess*2+mediaExcess*2+rotuloHeight
-
+        general = p.define_layer("General", "defaultstate=true")
         # Start a new page
         if not pageopen:
             p.begin_page_ext(mediaWidth, mediaHeigth, "trimbox=" +
                              trimbox+" bleedbox="+bleedbox+" cropbox="+cropbox)
             pageopen = True
 
+        p.begin_layer(general)
         # unitario
         p.fit_pdi_page(page, mediaExcess+cropExcess+addInfo+despX,
                        mediaExcess+rotuloHeight+cropExcess+despY, "")
-        # nala
-        p.fit_pdi_page(nalapage, mediaExcess+cropExcess,
-                       mediaExcess+rotuloHeight-nalaheight, "scale={0.6 0.6}")
-        p.close_pdi_page(nalapage)
-        p.close_pdi_document(nalapdf)
 
-        # Dibujo cruces de regisro
-        ones = ""
-        for x in range(len(colorsJson)):
-            ones = ones + "1 "
-
-        p.set_graphics_option("fillcolor={devicen " + str(devicen)+" " + ones +
-                              "} strokecolor={devicen " + str(devicen)+" " + ones + "} linewidth=0.01")
+        layerMarks = p.define_layer("Marks", "")
+        p.begin_layer(layerMarks)
 
         # Dibujo marcas de corte
         draw_crop_marks(p, mediaExcess+cropExcess+addInfo,  mediaExcess+rotuloHeight +
@@ -323,6 +263,9 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
 
         textCotaW = str(round(float(boxes["trimWidth"]), 3))+"mm"
         textCotaH = str(round(float(boxes["trimHeight"]), 3))+"mm"
+        # Dibujo cruces de regisro
+        p.set_graphics_option(
+            "fillcolor={spotname All 0.5} strokecolor={spotname All 0.5} linewidth=0.1")
 
         wCotaWidth = p.info_textline(textCotaW, "width", optlist)
         hCotaWidth = p.info_textline(textCotaW, "width", optlist+" rotate=90")
@@ -383,52 +326,148 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         y = yGen
 
         # Dibujo colores
-        for index, color in enumerate(colorsJson, start=0):
-            ceros = ""
-            cero7 = ""
-            cero5 = ""
-            cero2 = ""
-            for x in range(len(colorsJson)):
-                if (x == index):
-                    ceros = ceros + "1 "
-                    cero7 = cero7 + "0.7 "
-                    cero5 = cero5 + "0.5 "
-                    cero2 = cero2 + "0.2 "
-                else:
-                    ceros = ceros + "0 "
-                    cero7 = cero7 + "0 "
-                    cero5 = cero5 + "0 "
-                    cero2 = cero2 + "0 "
-            optlist = "fontname=Arial fontsize=" + \
-                str(fsize) + \
-                " encoding=unicode fillcolor={devicen " + \
-                str(devicen)+" " + ceros + "}"
-            print(optlist)
-            textline = color["name"]
+        for index, color in enumerate(colors, start=0):
+            if "PANTONE" in color:
+                optlist = "fontname=Arial fontsize=" + \
+                    str(fsize) + \
+                    " encoding=unicode fillcolor={ spotname {" + color + "} 1}"
+            else:
+                optlist = "fontname=Arial fontsize=" + \
+                    str(fsize) + \
+                    " encoding=unicode fillcolor={ " + color + " }"
+
+            textline = color
             textwidth = p.info_textline(textline, "width", optlist)
 
             p.fit_textline(textline, xGen-textwidth, y, optlist)
 
-            p.fit_textline(color["inkCov"]+"%", xGen+20, y, optlist)
-            p.set_graphics_option(
-                "fillcolor={ devicen " + str(devicen)+" " + ceros + "}")
-            p.rect(xGen+2, y+4, colorSize, 4)
-            p.fill()
-            p.set_graphics_option(
-                "fillcolor={ devicen " + str(devicen)+" " + cero7 + "}")
-            p.rect(xGen+2, y, colorSize, 4)
-            p.fill()
-            p.set_graphics_option(
-                "fillcolor={ devicen " + str(devicen)+" " + cero5 + "}")
-            p.rect(xGen+2+colorSize, y+4, colorSize, 4)
-            p.fill()
-            p.set_graphics_option(
-                "fillcolor={ devicen " + str(devicen)+" " + cero2 + "}")
-            p.rect(xGen+2+colorSize, y, colorSize, 4)
-            p.fill()
+            p.fit_textline(percentages[index]+"%", xGen+20, y, optlist)
 
-            p.set_graphics_option(
-                "strokecolor={ devicen " + str(devicen)+" " + ceros + "}")
+            if "PANTONE" in color:
+                p.set_graphics_option(
+                    "fillcolor={ spotname { " + color + "} 1}")
+                p.rect(xGen+2, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option(
+                    "fillcolor={ spotname { " + color + "} 0.7}")
+                p.rect(xGen+2, y, colorSize, 4)
+                p.fill()
+                p.set_graphics_option(
+                    "fillcolor={ spotname { " + color + "} 0.5}")
+                p.rect(xGen+2+colorSize, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option(
+                    "fillcolor={ spotname { " + color + "} 0.2}")
+                p.rect(xGen+2+colorSize, y, colorSize, 4)
+                p.fill()
+
+                p.set_graphics_option(
+                    "strokecolor={ spotname { " + color + "} 1}")
+            if color == "Cyan":
+                p.set_graphics_option("fillcolor={ cmyk 1 0 0 0 }")
+                p.rect(xGen+2, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0.7 0 0 0 }")
+                p.rect(xGen+2, y, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0.5 0 0 0 }")
+                p.rect(xGen+2+colorSize, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0.2 0 0 0 }")
+                p.rect(xGen+2+colorSize, y, colorSize, 4)
+                p.fill()
+
+                p.set_graphics_option("strokecolor={ cmyk 1 0 0 0 }")
+            if color == "Magenta":
+                p.set_graphics_option("fillcolor={ cmyk 0 1 0 0 }")
+                p.rect(xGen+2, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0 0.7 0 0 }")
+                p.rect(xGen+2, y, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0 0.5 0 0 }")
+                p.rect(xGen+2+colorSize, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0 0.2 0 0 }")
+                p.rect(xGen+2+colorSize, y, colorSize, 4)
+                p.fill()
+
+                p.set_graphics_option("strokecolor={ cmyk 0 1 0 0 }")
+            if color == "Yellow":
+                p.set_graphics_option("fillcolor={ cmyk 0 0 1 0 }")
+                p.rect(xGen+2, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0 0 0.7 0 }")
+                p.rect(xGen+2, y, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0 0 0.5 0 }")
+                p.rect(xGen+2+colorSize, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0 0 0.2 0 }")
+                p.rect(xGen+2+colorSize, y, colorSize, 4)
+                p.fill()
+
+                p.set_graphics_option("strokecolor={ cmyk 0 0 1 0 }")
+            if color == "Black":
+                p.set_graphics_option("fillcolor={ cmyk 0 0 0 1}")
+                p.rect(xGen+2, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0 0 0 0.7}")
+                p.rect(xGen+2, y, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0 0 0 0.5}")
+                p.rect(xGen+2+colorSize, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ cmyk 0 0 0 0.2}")
+                p.rect(xGen+2+colorSize, y, colorSize, 4)
+                p.fill()
+
+                p.set_graphics_option("strokecolor={ cmyk 0 0 0 1}")
+            if color == "Red":
+                p.set_graphics_option("fillcolor={ rgb 1 0 0 }")
+                p.rect(xGen+2, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ rgb 0.7 0 0 }")
+                p.rect(xGen+2, y, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ rgb 0.5 0 0 }")
+                p.rect(xGen+2+colorSize, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ rgb 0.2 0 0 }")
+                p.rect(xGen+2+colorSize, y, colorSize, 4)
+                p.fill()
+
+                p.set_graphics_option("strokecolor={ rgb 1 0 0 }")
+            if color == "Green":
+                p.set_graphics_option("fillcolor={ rgb 0 1 0 }")
+                p.rect(xGen+2, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ rgb 0 0.7 0 }")
+                p.rect(xGen+2, y, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ rgb 0 0.5 0 }")
+                p.rect(xGen+2+colorSize, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ rgb 0 0.2 0 }")
+                p.rect(xGen+2+colorSize, y, colorSize, 4)
+                p.fill()
+
+                p.set_graphics_option("strokecolor={ rgb 0 1 0 }")
+            if color == "Blue":
+                p.set_graphics_option("fillcolor={ rgb 0 0 1 }")
+                p.rect(xGen+2, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ rgb 0 0 0.7 }")
+                p.rect(xGen+2, y, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ rgb 0 0 0.5 }")
+                p.rect(xGen+2+colorSize, y+4, colorSize, 4)
+                p.fill()
+                p.set_graphics_option("fillcolor={ rgb 0 0 0.2 }")
+                p.rect(xGen+2+colorSize, y, colorSize, 4)
+                p.fill()
+
+                p.set_graphics_option("strokecolor={ rgb 0 0 1 }")
 
             # Dibujo la linea separdora
             p.moveto(2*crop_size*72/25.4 + nalawidth, y-2)
@@ -482,7 +521,12 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
             y = y-textHeight-4
 
             # imagen nalav
+        p.fit_pdi_page(nalapage, mediaExcess+cropExcess,
+                       mediaExcess+rotuloHeight-nalaheight, "scale={0.6 0.6}")
+        p.close_pdi_page(nalapage)
+        p.close_pdi_document(nalapdf)
 
+        p.end_layer()
         p.close_pdi_page(page)
         p.end_page_ext("")
         p.close_pdi_document(indoc)
