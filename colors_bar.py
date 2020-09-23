@@ -111,7 +111,6 @@ def make(searchpath, pdffile, outfile, colors, intensities, size, x, y, place, s
                 elif place == "R" or place == "L":
                     x = x-size
                 retX = x
-
             if sideY == "i":
                 if place == "T" or place == "B":
                     y = y+size
@@ -123,35 +122,13 @@ def make(searchpath, pdffile, outfile, colors, intensities, size, x, y, place, s
                 for i in intensities:
                     intense = int(i)/100
                     ceros = ""
-                    for x in range(len(colors)):
-                        if (x == index):
+                    for a in range(len(colors)):
+                        if (a == index):
                             ceros = ceros + str(intense)+" "
                         else:
                             ceros = ceros + "0 "
                     p.set_graphics_option(
                         "fillcolor={ devicen " + str(devicen)+" " + ceros + "}")
-                    # if "PANTONE" in color:
-                    # if color == "Cyan":
-                    #     p.set_graphics_option(
-                    #         "fillcolor={ cmyk " + str(intense) + " 0 0 0 }")
-                    # if color == "Magenta":
-                    #     p.set_graphics_option(
-                    #         "fillcolor={ cmyk 0 " + str(intense) + " 0 0 }")
-                    # if color == "Yellow":
-                    #     p.set_graphics_option(
-                    #         "fillcolor={ cmyk 0 0 " + str(intense) + " 0 }")
-                    # if color == "Black":
-                    #     p.set_graphics_option(
-                    #         "fillcolor={ cmyk 0 0 0 " + str(intense) + "}")
-                    # if color == "Red":
-                    #     p.set_graphics_option(
-                    #         "fillcolor={ rgb " + str(intense) + " 0 0 }")
-                    # if color == "Green":
-                    #     p.set_graphics_option(
-                    #         "fillcolor={ rgb 0 " + str(intense) + " 0 }")
-                    # if color == "Blue":
-                    #     p.set_graphics_option(
-                    # "fillcolor={ rgb 0 0 " + str(intense) + " }")
 
                     if place == "L" or place == "R":
                         p.rect(x, y-size, size, size)

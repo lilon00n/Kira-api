@@ -170,8 +170,6 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
 
         searchnalapath = './data'
         p.set_option("searchpath={" + searchnalapath + "}")
-        p.set_option(
-            "logging {filename {/Users/aldanaveronruizdiaz/TRABAJOS/PDFlib.log}}")
         # Open the input PDF */
         nalapdf = p.open_pdi_document('nala-rotulo.pdf', "")
         if nalapdf == -1:

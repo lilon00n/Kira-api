@@ -147,8 +147,8 @@ def make(searchpath, pdffile, outfile, colors, fsize, x, y, place, sideX, sideY)
                     y = y-totalH
             for index, color in enumerate(colors, start=0):
                 ceros = ""
-                for x in range(len(colors)):
-                    if (x == index):
+                for a in range(len(colors)):
+                    if (a == index):
                         ceros = ceros + "1 "
                     else:
                         ceros = ceros + "0 "
