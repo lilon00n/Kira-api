@@ -1,9 +1,10 @@
 import sys
 import json
 from PDFlib.PDFlib import *
+from make_devicen import make_devicen
 
 
-def make(searchpath, pdffile, outfile, x, y, crop_size):
+def make(searchpath, pdffile, outfile,  colors, x, y, crop_size):
     title = "Marcas de corte"
 
     x = float(x)
@@ -12,7 +13,7 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
 
     p = None
 
-    def create_micropoint(p, radius):
+    def create_micropoint(p, radius, devicen, ones):
         micropoint = -1
 
         # Outer circle
@@ -25,7 +26,7 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
 
         # Inner circle
         micropoint = p.add_path_point(micropoint, -(radius/2) / 0.3514729, 0, "move",
-                                      "fill nostroke strokecolor={spotname All 0.5} fillcolor={spotname All 0.5}")
+                                      "fill nostroke strokecolor={devicen " + str(devicen)+" " + ones + "} fillcolor={devicen " + str(devicen)+" " + ones + "}")
         micropoint = p.add_path_point(
             micropoint, (radius/2) / 0.3514729, 0, "control", "")
         micropoint = p.add_path_point(
@@ -44,7 +45,7 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
         p = PDFlib()
 
         p.set_option("searchpath={" + searchpath + "}")
-        p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
+        # p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
 
         # This means we must check return values of load_font() etc.
         p.set_option("errorpolicy=return")
@@ -65,7 +66,7 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
 
         p.set_info("Creator", "Nala by Verdant Solution")
         p.set_info("Title", title)
-
+        devicen = make_devicen(p, colors)
         # Loop over all pages of the input document
         for pageno in range(1, int(endpage)+1, 1):
             page = p.open_pdi_page(indoc, pageno, "cloneboxes")
@@ -81,9 +82,13 @@ def make(searchpath, pdffile, outfile, x, y, crop_size):
 
             p.fit_pdi_page(page, 0, pageheight, "cloneboxes")
             y = float(pageheight)-float(y)
+            ones = ""
+            for a in range(len(colors)):
+                ones = ones + "1 "
+
             p.set_graphics_option(
-                "fillcolor={spotname All 0.5} strokecolor={spotname All 0.5}")
-            micropoint = create_micropoint(p, crop_size)
+                "fillcolor={devicen " + str(devicen)+" " + ones + "} strokecolor={devicen " + str(devicen)+" " + ones + "}")
+            micropoint = create_micropoint(p, crop_size, devicen, ones)
             draw_corner(p, 0, x, y,  micropoint)
 
             p.close_pdi_page(page)

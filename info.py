@@ -2,9 +2,10 @@
 import sys
 import json
 from PDFlib.PDFlib import *
+from make_devicen import make_devicen
 
 
-def make(searchpath, pdffile, outfile, info, fsize, x, y, place, sideX, sideY):
+def make(searchpath, pdffile, outfile, colors, info, fsize, x, y, place, sideX, sideY):
     title = "Nombre de colores"
     fsize = float(fsize)
     x = float(x)
@@ -16,7 +17,7 @@ def make(searchpath, pdffile, outfile, info, fsize, x, y, place, sideX, sideY):
         p = PDFlib()
 
         p.set_option("searchpath={" + searchpath + "}")
-        p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
+        # p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
 
         # This means we must check return values of load_font() etc.
         p.set_option("errorpolicy=return")
@@ -35,7 +36,7 @@ def make(searchpath, pdffile, outfile, info, fsize, x, y, place, sideX, sideY):
 
         p.set_info("Creator", "Nala by Verdant Solution")
         p.set_info("Title", title)
-
+        devicen = make_devicen(p, colors)
         # Loop over all pages of the input document
         for pageno in range(1, int(endpage)+1, 1):
             page = p.open_pdi_page(indoc, pageno, "cloneboxes")
@@ -57,9 +58,14 @@ def make(searchpath, pdffile, outfile, info, fsize, x, y, place, sideX, sideY):
             else:
                 angle = 0
 
+            ones = ""
+            for a in range(len(colors)):
+                ones = ones + "1 "
+
             optlist = "fontname=Helvetica fontsize=" + \
                 str(fsize) + " encoding=unicode rotate=" + \
-                str(angle) + " fillcolor={ spotname All 1}"
+                str(angle) + " fillcolor={devicen " + \
+                str(devicen)+" " + ones + "}"
             totalW = p.info_textline(info, "width", optlist)
             totalH = p.info_textline(info, "height", optlist)
             retX = -1
