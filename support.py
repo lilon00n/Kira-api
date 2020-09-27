@@ -1,5 +1,6 @@
-title = "Barra de soporte"
+from PDFlib.PDFlib import *
 import sys
+title = "Barra de soporte"
 searchpath = '../../../worksDir'
 pdffile = "/usr/source/worksDir/TRABAJOS/Marcas/2/2_marks.pdf"
 outfile = "/usr/source/worksDir/TRABAJOS/Marcas/2/2_marks.pdf"
@@ -7,7 +8,6 @@ x = sys.argv[2]
 y = sys.argv[3]
 width = sys.argv[4]
 height = sys.argv[5]
-from PDFlib.PDFlib import *
 
 p = None
 
@@ -16,52 +16,51 @@ try:
 
     p.set_option("searchpath={" + searchpath + "}")
 
-    # This means we must check return values of load_font() etc. 
+    # This means we must check return values of load_font() etc.
     p.set_option("errorpolicy=return")
-     #Open the input PDF */
+    # Open the input PDF */
     indoc = p.open_pdi_document(pdffile, "")
     if indoc == -1:
         print("Error: " + p.get_errmsg())
         next
-    pagewidth=p.pcos_get_number(indoc, "pages[0]/width")
-    pageheight=p.pcos_get_number(indoc, "pages[0]/height")
+    pagewidth = p.pcos_get_number(indoc, "pages[0]/width")
+    pageheight = p.pcos_get_number(indoc, "pages[0]/height")
 
     endpage = p.pcos_get_number(indoc, "length:pages")
-    pageopen = False 
+    pageopen = False
     if p.begin_document(outfile, "") == -1:
         raise "Error: " + p.get_errmsg()
 
-    p.set_info("Creator", "PDFlib Cookbook")
-    p.set_info("Title", title )
-    
-    
-   
-    # Loop over all pages of the input document 
-    for pageno in range(1, int(endpage)+1, 1): 
+    p.set_info("Creator", "Nala by Verdant Solution")
+    p.set_info("Title", title)
+
+    # Loop over all pages of the input document
+    for pageno in range(1, int(endpage)+1, 1):
         page = p.open_pdi_page(indoc, pageno, "")
 
-        if page == -1: 
+        if page == -1:
             print("Error: " + p.get_errmsg())
             next
-        
-        # Start a new page 
-        if not pageopen: 
-            p.begin_page_ext(float(pagewidth), float(pageheight), "topdown=true")
+
+        # Start a new page
+        if not pageopen:
+            p.begin_page_ext(float(pagewidth), float(
+                pageheight), "topdown=true")
             pageopen = True
 
-        p.set_graphics_option("fillcolor={spotname All 0.5} strokecolor={spotname All 0.5}");
-        p.moveto(0, 0);
-        p.rect(float(x), float(y), float(width), float(height));
-        p.fill();
-        p.fit_pdi_page(page, 0, pageheight,"")
+        p.set_graphics_option(
+            "fillcolor={spotname All 0.5} strokecolor={spotname All 0.5}")
+        p.moveto(0, 0)
+        p.rect(float(x), float(y), float(width), float(height))
+        p.fill()
+        p.fit_pdi_page(page, 0, pageheight, "")
 
         p.close_pdi_page(page)
-    
+
         p.end_page_ext("")
 
     p.close_pdi_document(indoc)
-    
-    
+
     p.end_document("")
 
 except PDFlibException as ex:

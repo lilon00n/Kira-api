@@ -33,7 +33,7 @@ def make(searchpath, pdffile, outfile, info, fsize, x, y, place, sideX, sideY):
         if p.begin_document(outfile, "") == -1:
             raise "Error: " + p.get_errmsg()
 
-        p.set_info("Creator", "PDFlib Cookbook")
+        p.set_info("Creator", "Nala by Verdant Solution")
         p.set_info("Title", title)
 
         # Loop over all pages of the input document

@@ -3,7 +3,7 @@ import json
 from PDFlib.PDFlib import *
 
 
-def make(searchpath, pdffile, outfile, x, y, crop_size, weight):
+def make(searchpath, pdffile, outfile, colors, x, y, crop_size, weight):
 
     title = "Marcas de corte"
     #searchpath = sys.argv[1]
@@ -15,6 +15,55 @@ def make(searchpath, pdffile, outfile, x, y, crop_size, weight):
     crop_size = float(crop_size)
 
     p = None
+
+    def make_devicen(colors):
+        strColors = ""
+
+        transformFuncN = "%Device N \n"
+
+        n = len(colors)
+        k = n + n*3 - 1
+        adds = n-1
+
+        for color in colors:
+            transformFuncN = transformFuncN + str(color["l"]) + " " + str(
+                color["a"]) + " " + str(color["ba"]) + " % kcolor: "+color["name"]+" \n"
+
+            strColors = strColors+"{"+color["name"]+"} "
+
+        transformFuncN = transformFuncN+"% Blend L values\n"
+        for x in range(n):
+            transformFuncN = transformFuncN + \
+                str(k)+" index " + str(n*3-2*x) + " index mul \n"
+
+        for x in range(adds):
+            transformFuncN = transformFuncN+"add "
+        transformFuncN = transformFuncN+"\n"
+        transformFuncN = transformFuncN+str(k+2)+" 1 roll % Bottom: L\n"
+        transformFuncN = transformFuncN+"% Blend a values\n"
+        for x in range(n):
+            transformFuncN = transformFuncN + \
+                str(k)+" index " + str((n*3-1)-2*x) + " index mul \n"
+        for x in range(adds):
+            transformFuncN = transformFuncN+"add "
+        transformFuncN = transformFuncN+"\n"
+        transformFuncN = transformFuncN+str(k+2)+" 1 roll % Bottom: a\n"
+        transformFuncN = transformFuncN+"% Blend b values\n"
+        for x in range(n):
+            transformFuncN = transformFuncN + \
+                str(k)+" index " + str((n*3-2)-2*x) + " index mul \n"
+        for x in range(adds):
+            transformFuncN = transformFuncN+"add "
+        transformFuncN = transformFuncN+"\n"
+        transformFuncN = transformFuncN+str(k+2)+" 1 roll % Bottom: b\n"
+        pops = k+1
+        for x in range(pops):
+            transformFuncN = transformFuncN+"pop "
+        transformFuncN = transformFuncN+"\n"
+
+        devicen = p.create_devicen(
+            "names={"+strColors+"} alternate=lab transform={{" + transformFuncN + "}} ")
+        return devicen
 
     def create_registration_mark(p, radius):
         registration_mark = -1
@@ -83,9 +132,9 @@ def make(searchpath, pdffile, outfile, x, y, crop_size, weight):
         if p.begin_document(outfile, "") == -1:
             raise "Error: " + p.get_errmsg()
 
-        p.set_info("Creator", "PDFlib Cookbook")
+        p.set_info("Creator", "Nala by Verdant Solution")
         p.set_info("Title", title)
-
+        devicen = make_devicen(colors)
         # Loop over all pages of the input document
         for pageno in range(1, int(endpage)+1, 1):
             page = p.open_pdi_page(indoc, pageno, "cloneboxes")
@@ -100,10 +149,12 @@ def make(searchpath, pdffile, outfile, x, y, crop_size, weight):
                 pageopen = True
 
             y = float(pageheight)-float(y)
+            ones = ""
+            for a in range(len(colors)):
+                ones = ones + "1 "
             p.fit_pdi_page(page, 0, pageheight, "cloneboxes")
-
-            p.set_graphics_option(
-                "fillcolor={spotname All 0.5} strokecolor={spotname All 0.5} linewidth="+weight)
+            p.set_graphics_option("fillcolor={devicen " + str(devicen)+" " + ones +
+                                  "} strokecolor={devicen " + str(devicen)+" " + ones + "} linewidth="+weight)
             registration_mark = create_registration_mark(p, int(crop_size))
             draw_corner(p, 0, x, y,  registration_mark)
 

@@ -92,7 +92,7 @@ def make(searchpath, pdffile, outfile, colors, fsize, x, y, place, sideX, sideY)
         if p.begin_document(outfile, "") == -1:
             raise "Error: " + p.get_errmsg()
 
-        p.set_info("Creator", "PDFlib Cookbook")
+        p.set_info("Creator", "Nala by Verdant Solution")
         p.set_info("Title", title)
 
         devicen = make_devicen(colors)

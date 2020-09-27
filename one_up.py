@@ -222,7 +222,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         colorSize = 7
         fsize = 8
         separation = 4
-        cotaSeparation = 4*72/25.4  # 12mm del trim,
+        cotaSeparation = 5*72/25.4  # 12mm del trim,
         bleedExcess = 5*72/25.4  # 5mm
         cropExcess = crop_size*72/25.4  # 8mm
         mediaExcess = 5*72/25.4  # 5mm
@@ -314,7 +314,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
 
         # Dibujo marcas de corte
         draw_crop_marks(p, mediaExcess+cropExcess+addInfo,  mediaExcess+rotuloHeight +
-                        cropExcess+trimH, crop_size*72/25.4, 0.1, 0, 0, trimW, trimH)
+                        cropExcess+trimH, crop_size*72/25.4, 0.01, 0, 0, trimW, trimH)
 
         medX = mediaExcess+cropExcess+addInfo+trimW/2
         medY = mediaExcess+rotuloHeight+cropExcess+trimH/2

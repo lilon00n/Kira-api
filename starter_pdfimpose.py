@@ -1,17 +1,18 @@
 #!/usr/bin/python
 #
 # PDF impose:
-# Import all pages from one more existing PDFs, and place col x row pages 
+# Import all pages from one more existing PDFs, and place col x row pages
 # on each sheet of the output PDF (imposition).
-# 
+#
 # Required software: PDFlib+PDI/PPS 9
 # Required data: PDF documents
 #
 
 from PDFlib.PDFlib import *
 
+
 def impose(outfile):
-    # This is where the data files are. Adjust as necessary. 
+    # This is where the data files are. Adjust as necessary.
     searchpath = './data'
     #outfile = "starter_pdfimpose.pdf"
     title = "PDF Impose"
@@ -29,8 +30,7 @@ def impose(outfile):
     sheetwidth = 595   # width of the sheet
     sheetheight = 842  # height of the sheet
     maxcols = 3        # maxcols x maxrows pages will be placed on one sheet
-    maxrows = 4    
-
+    maxrows = 4
 
     p = None
 
@@ -39,18 +39,18 @@ def impose(outfile):
 
         p.set_option("searchpath={" + searchpath + "}")
 
-        # This means we must check return values of load_font() etc. 
+        # This means we must check return values of load_font() etc.
         p.set_option("errorpolicy=return")
 
         if p.begin_document(outfile, "") == -1:
             raise "Error: " + p.get_errmsg()
 
-        p.set_info("Creator", "PDFlib Cookbook")
-        p.set_info("Title", title )
-        
+        p.set_info("Creator", "Nala by Verdant Solution")
+        p.set_info("Title", title)
+
         # ---------------------------------------------------------------------
         # Define the sheet width and height, the number of maxrows and columns
-        # and calculate the scaling factor and cell dimensions for the 
+        # and calculate the scaling factor and cell dimensions for the
         # multi-page imposition.
         # ---------------------------------------------------------------------
 
@@ -63,12 +63,12 @@ def impose(outfile):
         colwidth = sheetwidth * scale
 
         # is a page open that must be closed?
-        pageopen = False 
-        
-        # Loop over all input documents 
+        pageopen = False
+
+        # Loop over all input documents
         for pdffile in (pdffiles):
 
-            #Open the input PDF */
+            # Open the input PDF */
             indoc = p.open_pdi_document(pdffile, "")
             if indoc == -1:
                 print("Error: " + p.get_errmsg())
@@ -76,19 +76,19 @@ def impose(outfile):
 
             endpage = p.pcos_get_number(indoc, "length:pages")
 
-            # Loop over all pages of the input document 
-            for pageno in range(1, int(endpage)+1, 1): 
+            # Loop over all pages of the input document
+            for pageno in range(1, int(endpage)+1, 1):
                 page = p.open_pdi_page(indoc, pageno, "")
 
-                if page == -1: 
+                if page == -1:
                     print("Error: " + p.get_errmsg())
                     next
-                
-                # Start a new page 
-                if not pageopen: 
+
+                # Start a new page
+                if not pageopen:
                     p.begin_page_ext(sheetwidth, sheetheight, "")
                     pageopen = True
-            
+
                 # The save/restore pair is required to get an independent
                 # clipping area for each mini page. Note that clipping
                 # is not required for the imported pages, but affects
@@ -100,38 +100,41 @@ def impose(outfile):
 
                 # Clipping path for the rectangle
                 p.rect(col * colwidth, sheetheight - (row + 1) * rowheight,
-                        colwidth, rowheight)
+                       colwidth, rowheight)
                 p.clip()
 
-                optlist = "boxsize {" + str(colwidth) + " " + str(rowheight) + "} fitmethod meet"
-                
-                p.fit_pdi_page(page, col * colwidth, sheetheight - (row + 1) * rowheight, optlist)
+                optlist = "boxsize {" + str(colwidth) + \
+                    " " + str(rowheight) + "} fitmethod meet"
+
+                p.fit_pdi_page(page, col * colwidth, sheetheight -
+                               (row + 1) * rowheight, optlist)
 
                 p.close_pdi_page(page)
-                
-                # Draw a frame around the mini page */ 
+
+                # Draw a frame around the mini page */
                 p.set_graphics_option("linewidth=" + str(scale))
-                p.rect(col * colwidth, sheetheight - (row + 1) * rowheight, colwidth, rowheight)
+                p.rect(col * colwidth, sheetheight - (row + 1)
+                       * rowheight, colwidth, rowheight)
                 p.stroke()
-                
+
                 p.restore()
                 # Start a new row if the current row is full
 
-                col +=1
-                if col == maxcols: 
+                col += 1
+                if col == maxcols:
                     col = 0
-                    row+=1
+                    row += 1
 
                 # Close the page if it is full
-                if row == maxrows: 
+                if row == maxrows:
                     row = 0
                     p.end_page_ext("")
                     pageopen = false
             p.close_pdi_document(indoc)
-        
-        if pageopen: 
+
+        if pageopen:
             p.end_page_ext("")
-        
+
         p.end_document("")
 
     except PDFlibException as ex:

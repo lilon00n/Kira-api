@@ -84,10 +84,11 @@ def make(searchpath, pdffile, outfile, colors, intensities, size, x, y, place, s
         if p.begin_document(outfile, "") == -1:
             raise "Error: " + p.get_errmsg()
 
-        p.set_info("Creator", "PDFlib Cookbook")
+        p.set_info("Creator", "Nala by Verdant Solution")
         p.set_info("Title", title)
 
         devicen = make_devicen(colors)
+
         # Loop over all pages of the input document
         for pageno in range(1, int(endpage)+1, 1):
             page = p.open_pdi_page(indoc, pageno, "cloneboxes")
@@ -117,7 +118,6 @@ def make(searchpath, pdffile, outfile, colors, intensities, size, x, y, place, s
                 elif place == "L" or place == "R":
                     y = y+qcolors*qint*size
                 retY = y
-
             for index, color in enumerate(colors, start=0):
                 for i in intensities:
                     intense = int(i)/100
