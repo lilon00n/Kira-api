@@ -135,6 +135,7 @@ def info():
         searchpath = body["searchpath"]
         pdffile = body["pdffile"]
         outfile = body["outfile"]
+        colors = body["colors"]
         info = body["info"]
         fsize = body["fsize"]
         x = body["x"]
@@ -142,7 +143,7 @@ def info():
         place = body["place"]
         sideX = body["sideX"]
         sideY = body["sideY"]
-        ret = make(searchpath, pdffile, outfile, info,
+        ret = make(searchpath, pdffile, outfile,  colors, info,
                    fsize, x, y, place, sideX, sideY)
         return ret
 
@@ -155,10 +156,11 @@ def micropoint():
         searchpath = body["searchpath"]
         pdffile = body["pdffile"]
         outfile = body["outfile"]
+        colors = body["colors"]
         x = body["x"]
         y = body["y"]
         size = body["size"]
-        make(searchpath, pdffile, outfile, x, y, size)
+        make(searchpath, pdffile, outfile, colors, x, y, size)
         return "ok"
 
 

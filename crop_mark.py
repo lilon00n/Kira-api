@@ -3,6 +3,7 @@
 import sys
 import json
 from PDFlib.PDFlib import *
+from make_devicen import make_devicen
 
 
 def make(searchpath, pdffile, outfile, colors, x_margin, y_margin, size, width, height, dist_width, dist_height, weight):
@@ -22,55 +23,6 @@ def make(searchpath, pdffile, outfile, colors, x_margin, y_margin, size, width, 
 
     p = None
 
-    def make_devicen(colors):
-        strColors = ""
-
-        transformFuncN = "%Device N \n"
-
-        n = len(colors)
-        k = n + n*3 - 1
-        adds = n-1
-
-        for color in colors:
-            transformFuncN = transformFuncN + str(color["l"]) + " " + str(
-                color["a"]) + " " + str(color["ba"]) + " % kcolor: "+color["name"]+" \n"
-
-            strColors = strColors+"{"+color["name"]+"} "
-
-        transformFuncN = transformFuncN+"% Blend L values\n"
-        for x in range(n):
-            transformFuncN = transformFuncN + \
-                str(k)+" index " + str(n*3-2*x) + " index mul \n"
-
-        for x in range(adds):
-            transformFuncN = transformFuncN+"add "
-        transformFuncN = transformFuncN+"\n"
-        transformFuncN = transformFuncN+str(k+2)+" 1 roll % Bottom: L\n"
-        transformFuncN = transformFuncN+"% Blend a values\n"
-        for x in range(n):
-            transformFuncN = transformFuncN + \
-                str(k)+" index " + str((n*3-1)-2*x) + " index mul \n"
-        for x in range(adds):
-            transformFuncN = transformFuncN+"add "
-        transformFuncN = transformFuncN+"\n"
-        transformFuncN = transformFuncN+str(k+2)+" 1 roll % Bottom: a\n"
-        transformFuncN = transformFuncN+"% Blend b values\n"
-        for x in range(n):
-            transformFuncN = transformFuncN + \
-                str(k)+" index " + str((n*3-2)-2*x) + " index mul \n"
-        for x in range(adds):
-            transformFuncN = transformFuncN+"add "
-        transformFuncN = transformFuncN+"\n"
-        transformFuncN = transformFuncN+str(k+2)+" 1 roll % Bottom: b\n"
-        pops = k+1
-        for x in range(pops):
-            transformFuncN = transformFuncN+"pop "
-        transformFuncN = transformFuncN+"\n"
-
-        devicen = p.create_devicen(
-            "names={"+strColors+"} alternate=lab transform={{" + transformFuncN + "}} ")
-        return devicen
-
     def draw_corner(p, x, y, crop_mark):
         p.save()
         p.translate(x, y)
@@ -81,7 +33,7 @@ def make(searchpath, pdffile, outfile, colors, x_margin, y_margin, size, width, 
         p = PDFlib()
 
         p.set_option("searchpath={" + searchpath + "}")
-        p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
+        # p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
 
         # This means we must check return values of load_font() etc.
         p.set_option("errorpolicy=return")
@@ -100,7 +52,7 @@ def make(searchpath, pdffile, outfile, colors, x_margin, y_margin, size, width, 
 
         p.set_info("Creator", "Nala by Verdant Solution")
         p.set_info("Title", title)
-        devicen = make_devicen(colors)
+        devicen = make_devicen(p, colors)
         # Loop over all pages of the input document
         for pageno in range(1, int(endpage)+1, 1):
             page = p.open_pdi_page(indoc, pageno, "cloneboxes")
