@@ -5,7 +5,10 @@ from make_devicen import make_devicen
 
 
 def make(searchpath, pdffile, outfile,  colors, x, y, crop_size):
-    title = "Marcas de corte"
+    paths = outfile.split("\\")
+    if len(paths) == 1:
+        paths = outfile.split("/")
+    title = paths[len(paths)-1]
 
     x = float(x)
     y = float(y)

@@ -7,7 +7,10 @@ from make_devicen import make_devicen
 
 
 def make(searchpath, pdffile, outfile, colors, x_margin, y_margin, size, width, height, dist_width, dist_height, weight):
-    title = "Marcas de corte"
+    paths = outfile.split("\\")
+    if len(paths) == 1:
+        paths = outfile.split("/")
+    title = paths[len(paths)-1]
     #searchpath = sys.argv[1]
     #pdffile = sys.argv[2]
     #outfile = sys.argv[3]

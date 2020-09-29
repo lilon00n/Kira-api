@@ -6,11 +6,13 @@ from make_devicen import make_devicen
 
 
 def make(searchpath, pdffile, outfile, colors, info, fsize, x, y, place, sideX, sideY):
-    title = "Nombre de colores"
+    paths = outfile.split("\\")
+    if len(paths) == 1:
+        paths = outfile.split("/")
+    title = paths[len(paths)-1]
     fsize = float(fsize)
     x = float(x)
     y = float(y)
-
     p = None
 
     try:

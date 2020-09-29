@@ -6,7 +6,10 @@ from make_devicen import make_devicen
 
 
 def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
-    title = "Nombre de colores"
+    paths = outfile.split("\\")
+    if len(paths) == 1:
+        paths = outfile.split("/")
+    title = paths[len(paths)-1]
     p = None
     info = json.loads(info)
     boxes = json.loads(boxes)
@@ -176,6 +179,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         fsize = 8
         separation = 4
         cotaSeparation = 5*72/25.4  # 12mm del trim,
+        cruzSeparation = 3*72/25.4  # 12mm del trim,
         bleedExcess = 5*72/25.4  # 5mm
         cropExcess = crop_size*72/25.4  # 8mm
         mediaExcess = 5*72/25.4  # 5mm
@@ -282,13 +286,13 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
 
         registration_mark = create_registration_mark(p, 5)
         draw_registration_mark(p, medX, mediaExcess+rotuloHeight+cropExcess +
-                               trimH+separation+hCotaHeight/2,  registration_mark)  # Top
+                               trimH+separation+hCotaHeight/2+cruzSeparation,  registration_mark)  # Top
         draw_registration_mark(p, medX, mediaExcess+rotuloHeight+cropExcess -
-                               separation-hCotaHeight/2,  registration_mark)  # Bottom
+                               separation-hCotaHeight/2-cruzSeparation,  registration_mark)  # Bottom
         draw_registration_mark(p, mediaExcess+cropExcess+addInfo -
-                               separation-hCotaHeight/2, medY,  registration_mark)  # Left
+                               separation-hCotaHeight/2-cruzSeparation, medY,  registration_mark)  # Left
         draw_registration_mark(p, mediaExcess+cropExcess+addInfo+trimW +
-                               separation+hCotaHeight/2, medY,  registration_mark)  # Right
+                               separation+hCotaHeight/2+cruzSeparation, medY,  registration_mark)  # Right
 
         p.set_graphics_option("strokecolor={ cmyk 0 0 0 1}")
 
@@ -330,7 +334,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
                        cotaSeparation, medY-hCotaWidth/2, optlist)
 
         xGen = mediaExcess+cropExcess + nalawidth + maxColor + 10
-        yGen = mediaExcess+rotuloHeight
+        yGen = mediaExcess+rotuloHeight - 10
         y = yGen
 
         # Dibujo colores

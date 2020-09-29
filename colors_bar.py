@@ -5,7 +5,10 @@ from make_devicen import make_devicen
 
 
 def make(searchpath, pdffile, outfile, colors, intensities, size, x, y, place, sideX, sideY):
-    title = "Nombre de colores"
+    paths = outfile.split("\\")
+    if len(paths) == 1:
+        paths = outfile.split("/")
+    title = paths[len(paths)-1]
     intensities = intensities.split(',')
     x = float(x)
     y = float(y)

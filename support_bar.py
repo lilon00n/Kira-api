@@ -4,14 +4,10 @@ from make_devicen import make_devicen
 
 
 def make(searchpath, pdffile, outfile, colors, x, y, width, height, percent):
-    title = "Barra de soporte"
-    #searchpath = sys.argv[1]
-    #pdffile = sys.argv[2]
-    #outfile = sys.argv[3]
-    #x = sys.argv[4]
-    #y = sys.argv[5]
-    #width = sys.argv[6]
-    #height = sys.argv[7]
+    paths = outfile.split("\\")
+    if len(paths) == 1:
+        paths = outfile.split("/")
+    title = paths[len(paths)-1]
     percent = str(percent)
     p = None
 
