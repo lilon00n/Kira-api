@@ -4,7 +4,7 @@ from PDFlib.PDFlib import *
 
 
 def make(searchpath, pdffile, outfile, rombofile, x, y):
-    title = "Barra de soporte"
+    title = outfile
     x = float(x)
     y = float(y)
 
