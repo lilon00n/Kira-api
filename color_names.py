@@ -78,6 +78,7 @@ def make(searchpath, pdffile, outfile, colors, fsize, x, y, place, sideX, sideY)
             totalW = p.info_textline(colorNames, "width", optlist)
             totalH = p.info_textline(colorNames, "height", optlist)
             y = float(pageheight)-float(y)
+
             if sideX == "i":
                 if place == "T" or place == "B":
                     x = x-totalW
@@ -93,9 +94,9 @@ def make(searchpath, pdffile, outfile, colors, fsize, x, y, place, sideX, sideY)
                 if place == "B":
                     y = y+totalH
                 elif place == "R":
-                    y = y+totalW
+                    y = y
                 elif place == "L":
-                    y = y+totalW
+                    y = y
                 retY = y
             else:
                 if place == "T":

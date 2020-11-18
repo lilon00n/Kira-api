@@ -20,9 +20,17 @@ def make(searchpath, pdffile, outfile, colors, x_margin, y_margin, size, width, 
     width = float(width)
     height = float(height)
     weight = str(weight)
-    print(weight)
     dist_width = float(dist_width)
     dist_height = float(dist_height)
+
+    print(x_margin)
+    print(y_margin)
+    print(size)
+    print(width)
+    print(height)
+    print(weight)
+    print(dist_width)
+    print(dist_height)
 
     p = None
 
