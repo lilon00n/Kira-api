@@ -130,7 +130,7 @@ def make(searchpath, pdffile, outfile, boxes, colors, percentages, info):
             next
 
         p.set_option("searchpath={" + searchpath + "}")
-        # ###p.set_option("license=w900201-010093-143958-YCM672-UA9XC2")
+        # ##p.set_option("license=w900201-010095-144031-B49YD2-9KN842")
 
         # This means we must check return values of load_font() etc.
         p.set_option("errorpolicy=return")
