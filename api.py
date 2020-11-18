@@ -108,6 +108,25 @@ def cropMark():
         return "ok"
 
 
+@app.route('/cropStations', methods=['POST'])
+def cropStations():
+    from crop_stations import make
+    if request.method == 'POST':
+        body = request.get_json()
+        searchpath = body["searchpath"]
+        pdffile = body["pdffile"]
+        outfile = body["outfile"]
+        colors = body["colors"]
+        stationsMarks = body["stationsMarks"]
+        size = body["size"]
+        dist_width = body["dist_width"]
+        dist_height = body["dist_height"]
+        weight = body["weight"]
+        make(searchpath, pdffile, outfile,  colors, stationsMarks,
+             size,  dist_width, dist_height, weight)
+        return "ok"
+
+
 @app.route('/registrationMark', methods=['POST'])
 def registrationMark():
     from registration_mark import make
