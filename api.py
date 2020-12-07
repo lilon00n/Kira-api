@@ -213,5 +213,45 @@ def makeOneUp():
         make(searchpath, pdffile, outfile, boxes, colors, info)
         return "ok"
 
+@app.route('/inkCoverage', methods=['POST'])
+def getInkCoverage():
+    import numpy as np
+    import cv2
+    import sys
+    print("pasé la importación")
+    if request.method == 'POST':
+        body = request.get_json()
+        paths = body["paths"]
+        print("objeto paths")
+        print(paths)
+
+        paths = paths.split(',')
+
+        array = []
+        for path in paths:
+            img = cv2.imread(path, 0)
+
+            inkcovIMG = img/np.full(img.shape, 255)
+            inkCovFromImg = 1-np.mean(inkcovIMG)
+            print (inkCovFromImg)
+            array.append(inkCovFromImg)
+
+        return str(array[::-1])
+        # return getInkCoverageList(paths)
+
+# print(array)
+
+# def getInkCoverageList():
+#     import numpy as np
+#     import cv2
+#     import sys
+
+#     for path in paths:
+#     img = cv2.imread(path, 0)
+
+#     inkcovIMG = img/np.full(img.shape, 255)
+#     inkCovFromImg = 1-np.mean(inkcovIMG)
+#     print (inkCovFromImg)
+#     array.append(inkCovFromImg)
 
 app.run(host="0.0.0.0", port=8000, debug=True)
