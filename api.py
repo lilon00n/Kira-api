@@ -236,7 +236,8 @@ def getInkCoverage():
             print (inkCovFromImg)
             array.append(inkCovFromImg)
 
-        return str(array[::-1])
+        # return str(array[::-1])
+        return str(array)
         # return getInkCoverageList(paths)
 
 # print(array)
