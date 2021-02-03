@@ -29,7 +29,7 @@ def make(searchpath, pdffile, outfile, colors, fsize, x, y, place, sideX, sideY)
         p = PDFlib()
 
         p.set_option("searchpath={" + searchpath + "}")
-        # p.set_option("license=w900201-010095-144031-B49YD2-9KN842")
+        p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
 
         # This means we must check return values of load_font() etc.
         p.set_option("errorpolicy=return")
