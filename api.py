@@ -213,6 +213,23 @@ def makeOneUp():
         make(searchpath, pdffile, outfile, boxes, colors, info)
         return "ok"
 
+
+@app.route('/multipage', methods=['POST'])
+def makeMultipage():
+    from multipage import make
+    if request.method == 'POST':
+        body = request.get_json()
+        searchpath = body["searchpath"]
+        pdffile = body["pdffile"]
+        outfile = body["outfile"]
+        separationsFolder = body["separationsFolder"]
+        # boxes = json.dumps(body["boxes"])
+        pathImages = body["pathImages"]
+        # info = json.dumps(body["info"])
+        make(searchpath, pdffile, outfile, separationsFolder, pathImages)
+        return "ok"
+
+
 @app.route('/inkCoverage', methods=['POST'])
 def getInkCoverage():
     import numpy as np
@@ -233,7 +250,7 @@ def getInkCoverage():
 
             inkcovIMG = img/np.full(img.shape, 255)
             inkCovFromImg = 1-np.mean(inkcovIMG)
-            print (inkCovFromImg)
+            print(inkCovFromImg)
             array.append(inkCovFromImg)
 
         # return str(array[::-1])
@@ -254,5 +271,6 @@ def getInkCoverage():
 #     inkCovFromImg = 1-np.mean(inkcovIMG)
 #     print (inkCovFromImg)
 #     array.append(inkCovFromImg)
+
 
 app.run(host="0.0.0.0", port=8000, debug=True)
