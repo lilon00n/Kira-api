@@ -225,8 +225,9 @@ def makeMultipage():
         separationsFolder = body["separationsFolder"]
         # boxes = json.dumps(body["boxes"])
         pathImages = body["pathImages"]
+        names = body["names"]
         # info = json.dumps(body["info"])
-        make(searchpath, pdffile, outfile, separationsFolder, pathImages)
+        make(searchpath, pdffile, outfile, separationsFolder, pathImages, names)
         return "ok"
 
 

@@ -5,7 +5,7 @@ from PDFlib.PDFlib import *
 from make_devicen import make_devicen
 
 
-def make(searchpath, pdffile, outfile, separationsFolder, pathImages):
+def make(searchpath, pdffile, outfile, separationsFolder, pathImages, names):
     paths = outfile.split("\\")
     if len(paths) == 1:
         paths = outfile.split("/")
@@ -53,17 +53,21 @@ def make(searchpath, pdffile, outfile, separationsFolder, pathImages):
         p.end_page_ext("")
         print(separationsFolder)
         # Loop over all pages of the input document
-        for image in pathImages:
+        # for image in pathImages:
+        for index, image in enumerate(pathImages, start=0):
             tif = p.load_image("tiff", separationsFolder+image, "page=1")
             if tif == -1:
                 print("Error: " + p.get_errmsg())
                 next
 
             # Start a new page
-            p.begin_page_ext(float(pagewidth), float(pageheight), "")
-            p.fit_image(tif, 0.0, 0.0, "adjustpage")
+            p.begin_page_ext(float(pagewidth), float(pageheight)+10, "")
+            p.fit_image(tif, 0.0, 10, "adjustpage")
             p.close_image(tif)
+            optlist = "fontname=Helvetica fontsize=10 encoding=unicode  fillcolor={ Black }"
 
+            textline = names[index]
+            p.fit_textline(textline, 0, 0, optlist)
             p.end_page_ext("")
             print(image)
 
