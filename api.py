@@ -199,6 +199,21 @@ def rombos():
         return "ok"
 
 
+@app.route('/circles', methods=['POST'])
+def circles():
+    from circles import make
+    if request.method == 'POST':
+        body = request.get_json()
+        searchpath = body["searchpath"]
+        pdffile = body["pdffile"]
+        outfile = body["outfile"]
+        x = body["x"]
+        y = body["y"]
+
+        make(searchpath, pdffile, outfile, x, y)
+        return "ok"
+
+
 @app.route('/oneUp', methods=['POST'])
 def makeOneUp():
     from one_up import make
