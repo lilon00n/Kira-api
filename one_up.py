@@ -160,6 +160,11 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         if nalapage == -1:
             print("Error: " + p.get_errmsg())
             next
+        p.set_option("searchpath={" + searchnalapath + "}")
+        logoDaet = p.load_image("png", "daetwylerMX.png", "page=1")
+        if logoDaet == -1:
+            print("Error: " + p.get_errmsg())
+            next
 
         bleed0 = float(boxes["bleed"][0])
         bleed1 = float(boxes["bleed"][1])
@@ -172,6 +177,14 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         trimH = float(boxes["trimHeight"])*72/25.4
         nalaheight = p.pcos_get_number(nalapdf, "pages[0]/height")*0.6
         nalawidth = p.pcos_get_number(nalapdf, "pages[0]/width")*0.6
+
+        logoDaetHeight = p.info_image(
+            logoDaet, "height", "scale=0.05")
+        logoDaetWidth = p.info_image(
+            logoDaet, "width", "scale=0.05")
+
+        # maxLogo  =  nalawidth
+        maxLogo = logoDaetWidth
         titles = ["Cliente:", "Vendedor:", "Esp. técnica:", "Archivo:"]
         keys = ["customer", "salesman", "tsCode", "fileName"]
         crop_size = 8
@@ -197,7 +210,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         colorsHeight = len(colorsJson)*(textHeight+8)
         matMachHeight = len(materialMachines)*2*(textHeight+4)
 
-        heights.append(nalaheight)
+        heights.append(nalaheight+10+logoDaetHeight)
         heights.append(colorsHeight)
         heights.append(matMachHeight)
 
@@ -225,7 +238,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
             textwidth = p.info_textline(mm["material"], "width", optlist)
             if(textwidth > maxMachine):
                 maxMachine = textwidth
-        infoSize = nalawidth+maxColor+colorSize*2+percentageWidth + \
+        infoSize = maxLogo+maxColor+colorSize*2+percentageWidth + \
             tswidth+maxInfo+10+machinewidth+maxMachine+5
 
         addInfo = 0
@@ -260,6 +273,11 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
                        mediaExcess+rotuloHeight-nalaheight, "scale={0.6 0.6}")
         p.close_pdi_page(nalapage)
         p.close_pdi_document(nalapdf)
+
+        # logo daetwyler
+        p.fit_image(logoDaet, mediaExcess+cropExcess,
+                    mediaExcess+rotuloHeight-nalaheight-10-logoDaetHeight, "scale=0.05")
+        p.close_image(logoDaet)
 
         # Dibujo cruces de regisro
         ones = ""
@@ -333,7 +351,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         p.fit_textline(textCotaH, mediaExcess+cropExcess+addInfo -
                        cotaSeparation, medY-hCotaWidth/2, optlist)
 
-        xGen = mediaExcess+cropExcess + nalawidth + maxColor + 10
+        xGen = mediaExcess+cropExcess + maxLogo + maxColor + 10
         yGen = mediaExcess+rotuloHeight - 10
         y = yGen
 
@@ -358,7 +376,6 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
                 str(fsize) + \
                 " encoding=unicode fillcolor={devicen " + \
                 str(devicen)+" " + ceros + "}"
-            print(optlist)
             textline = color["name"]
             textwidth = p.info_textline(textline, "width", optlist)
 
@@ -386,7 +403,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
                 "strokecolor={ devicen " + str(devicen)+" " + ceros + "}")
 
             # Dibujo la linea separdora
-            p.moveto(2*crop_size*72/25.4 + nalawidth, y-2)
+            p.moveto(2*crop_size*72/25.4 + maxLogo, y-2)
             p.lineto(xGen + colorSize*2+percentageWidth, y-2)
             p.stroke()
 
