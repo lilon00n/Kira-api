@@ -1,0 +1,46 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" 
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="25cm" height="25cm"  viewBox="0 0 500 660"
+     xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     version="1.1">
+<desc>SVG color extension samples</desc>
+
+<defs>
+	<linearGradient id="spot_color_gradient" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="450" y2="40">
+		<stop offset="0" stop-color="#FE511B icc-named-color(ignored,'CompanyRed')"/>
+		<stop offset="1" stop-color="#0000FF icc-named-color(ignored,'PANTONE 3395 U')"/>
+	</linearGradient>
+</defs>
+
+<rect x="50" y="10"  width="450" height="40" fill="#959595 device-gray(0.5)"/>
+<text x="60" y="35" fill="white" font="18px Helvetica">device-gray(0.5)</text> 
+
+<rect x="50" y="60"  width="450" height="40" fill="#0000FF device-rgb(0, 0, 255)"/>
+<text x="60" y="85" fill="white" font="18px Helvetica">device-rgb(0, 0, 255)</text> 
+
+<rect x="50" y="110" width="450" height="40" fill="#E6007D device-cmyk(0, 1, 0, 0)"/>
+<text x="60" y="135" fill="white" font="18px Helvetica">device-cmyk(0, 1, 0, 0)</text> 
+
+<rect x="50" y="160" width="450" height="40" fill="#598237 cielab(50, -25, 35)"/>
+<text x="60" y="185" fill="white" font="18px Helvetica">cielab(50, -25, 35)</text> 
+
+<rect x="50" y="210" width="450" height="40" fill="#CC6633 icc-color(sRGB, 0.8, 0.4, 0.2)"/>
+<text x="60" y="235" fill="white" font="18px Helvetica">icc-color(sRGB, 0.8, 0.4, 0.2)</text> 
+
+<rect x="50" y="260" width="450" height="40" fill="#2B7FAB icc-color(ISOcoated_v2_eci, 0.8, 0.4, 0.2, 0.0)"/>
+<text x="60" y="285" fill="white" font="18px Helvetica">icc-color(ISOcoated_v2_eci, 0.8, 0.4, 0.2, 0.0)</text> 
+
+<rect x="50" y="310" width="450" height="40" fill="#FFB12D icc-named-color(ignored, 'PANTONE 123 U')"/>
+<text x="60" y="335" fill="white" font="18px Helvetica">icc-named-color(ignored, 'PANTONE 123 U')</text> 
+
+<rect x="50" y="360" width="450" height="40" fill="#FE511B icc-named-color(ignored, 'CompanyRed')"/>
+<text x="60" y="385" fill="white" font="18px Helvetica">icc-named-color(ignored, 'CompanyRed')</text> 
+
+<rect x="50" y="410" width="450" height="40" fill="#E0944A device-nchannel(0.5, 0.75)"/>
+<text x="60" y="435" fill="white" font="18px Helvetica">device-nchannel(0.5, 0.75)</text> 
+
+<rect x="50" y="460" width="450" height="40" fill="url(#spot_color_gradient)"/>
+<text x="60" y="485" fill="white" font="18px Helvetica">gradient from 'CompanyRed' to 'PANTONE 3395 U'</text> 
+	
+</svg>

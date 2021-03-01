@@ -209,9 +209,13 @@ def circles():
         outfile = body["outfile"]
         x = body["x"]
         y = body["y"]
-
-        make(searchpath, pdffile, outfile, x, y)
-        return "ok"
+        colors = body["colors"]
+        place = body["place"]
+        sideX = body["sideX"]
+        sideY = body["sideY"]
+        ret = make(searchpath, pdffile, outfile, x,
+                   y, colors, place, sideX, sideY)
+        return ret
 
 
 @app.route('/oneUp', methods=['POST'])
