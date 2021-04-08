@@ -3,9 +3,11 @@ import sys
 import json
 from PDFlib.PDFlib import *
 from make_devicen import make_devicen
+from clients import findClient
 
 
-def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
+def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
+    client = findClient(client)
     paths = outfile.split("\\")
     if len(paths) == 1:
         paths = outfile.split("/")
@@ -161,8 +163,8 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
             print("Error: " + p.get_errmsg())
             next
         p.set_option("searchpath={" + searchnalapath + "}")
-        logoDaet = p.load_image("png", "daetwylerMX.png", "page=1")
-        if logoDaet == -1:
+        logoClient = p.load_image(client.ext, client.logo, "page=1")
+        if logoClient == -1:
             print("Error: " + p.get_errmsg())
             next
 
@@ -178,13 +180,13 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         nalaheight = p.pcos_get_number(nalapdf, "pages[0]/height")*0.6
         nalawidth = p.pcos_get_number(nalapdf, "pages[0]/width")*0.6
 
-        logoDaetHeight = p.info_image(
-            logoDaet, "height", "scale=0.05")
-        logoDaetWidth = p.info_image(
-            logoDaet, "width", "scale=0.05")
+        logoClientHeight = p.info_image(
+            logoClient, "height", "scale=0.05")
+        logoClientWidth = p.info_image(
+            logoClient, "width", "scale=0.05")
 
         # maxLogo  =  nalawidth
-        maxLogo = logoDaetWidth
+        maxLogo = logoClientWidth
         titles = ["Cliente:", "Vendedor:", "Esp. técnica:", "Archivo:"]
         keys = ["customer", "salesman", "tsCode", "fileName"]
         crop_size = 8
@@ -210,7 +212,7 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         colorsHeight = len(colorsJson)*(textHeight+8)
         matMachHeight = len(materialMachines)*2*(textHeight+4)
 
-        heights.append(nalaheight+10+logoDaetHeight)
+        heights.append(nalaheight+10+logoClientHeight)
         heights.append(colorsHeight)
         heights.append(matMachHeight)
 
@@ -275,9 +277,9 @@ def make(searchpath, pdffile, outfile, boxes, colorsJson, info):
         p.close_pdi_document(nalapdf)
 
         # logo daetwyler
-        p.fit_image(logoDaet, mediaExcess+cropExcess,
-                    mediaExcess+rotuloHeight-nalaheight-10-logoDaetHeight, "scale=0.05")
-        p.close_image(logoDaet)
+        p.fit_image(logoClient, mediaExcess+cropExcess,
+                    mediaExcess+rotuloHeight-nalaheight-10-logoClientHeight, "scale=0.05")
+        p.close_image(logoClient)
 
         # Dibujo cruces de regisro
         ones = ""
