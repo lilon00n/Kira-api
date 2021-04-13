@@ -50,7 +50,7 @@ def make(searchpath, pdffile, outfile, colors, x, y, width, height, percent):
             p.fit_pdi_page(page, 0, pageheight, "cloneboxes")
             ones = ""
             for a in range(len(colors)):
-                ones = ones + "1 "
+                ones = ones + percent + " "
 
             p.set_graphics_option("fillcolor={devicen " + str(devicen)+" " + ones +
                                   "} strokecolor={devicen " + str(devicen)+" " + ones + "}")
