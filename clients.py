@@ -10,7 +10,7 @@ class Client:
 
 def populateClients():
 
-    qa = Client("HFK139", "verdant.png", "png")
+    qa = Client("HFK139", "serviestampados.png", "png")
     daet = Client("DAETWY", "daetwylerMX.png", "png")
     flexo = Client("FLHN01", "FlexoDigital-01.png", "png")
 
