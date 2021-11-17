@@ -10,13 +10,15 @@ class Client:
 
 def populateClients():
 
-    qa = Client("HFK139", "serviestampados.png", "png")
+    qa = Client("HFK139", "verdant.png", "png")
     daet = Client("DAETWY", "daetwylerMX.png", "png")
     flexo = Client("FLHN01", "FlexoDigital-01.png", "png")
+    eticom = Client("ETICOM", "logo-eticm.png", "png")
 
     clientsList.append(qa)
     clientsList.append(daet)
     clientsList.append(flexo)
+    clientsList.append(eticom)
 
 
 def findClient(clientCode):
