@@ -14,6 +14,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
     title = paths[len(paths)-1]
     p = None
     info = json.loads(info)
+    print(info)
     boxes = json.loads(boxes)
 
     def draw_corner(p, x, y, crop_mark, weight):
@@ -135,7 +136,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             next
 
         p.set_option("searchpath={" + searchpath + "}")
-        p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
+        #p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
 
         # This means we must check return values of load_font() etc.
         p.set_option("errorpolicy=return")
@@ -145,10 +146,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             print("Error: " + p.get_errmsg())
             next
 
-        endpage = p.pcos_get_number(indoc, "length:pages")
         pageopen = False
-        pagewidth = p.pcos_get_number(indoc, "pages[0]/width")
-        pageheight = p.pcos_get_number(indoc, "pages[0]/height")
         if p.begin_document(outfile, "") == -1:
             raise "Error: " + p.get_errmsg()
 
@@ -185,10 +183,12 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
         logoClientWidth = p.info_image(
             logoClient, "width", "scale=0.05")
 
+
+
         # maxLogo  =  nalawidth
         maxLogo = logoClientWidth
-        titles = ["Cliente:", "Vendedor:", "Esp. técnica:", "Archivo:"]
-        keys = ["customer", "salesman", "tsCode", "fileName"]
+        titles = ["Cliente:", "Vendedor:", "Esp. técnica:", "Archivo:", "Tipo de producto:","Tipo de código:", "No. Barras","Diseñador"]
+        keys = ["customer", "salesman", "tsCode", "fileName","productType","barcodeType","barcodeNumber","designer"]
         crop_size = 8
         colorSize = 7
         fsize = 8
@@ -203,16 +203,21 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
 
         # Defino alto del rotulo
         optlist = "fontname=Arial fontsize=" + str(fsize) + " encoding=unicode"
+
         textHeight = p.info_textline("Un color", "height", optlist)
+
         percentageWidth = p.info_textline("100.00%  ", "width", optlist)
-        tswidth = p.info_textline(" Esp. tecnica:", "width", optlist)
+        tswidth = p.info_textline(" Tipo de producto:", "width", optlist)
         machinewidth = p.info_textline("Maquina:", "width", optlist)
+        salidawidth = p.info_textline("Salida:", "width", optlist)
         heights = []
 
         colorsHeight = len(colorsJson)*(textHeight+8)
         matMachHeight = len(materialMachines)*2*(textHeight+4)
+        infosHeight = len(titles)*(textHeight+4)
 
         heights.append(nalaheight+10+logoClientHeight)
+        heights.append(infosHeight)
         heights.append(colorsHeight)
         heights.append(matMachHeight)
 
@@ -240,8 +245,17 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             textwidth = p.info_textline(mm["material"], "width", optlist)
             if(textwidth > maxMachine):
                 maxMachine = textwidth
-        infoSize = maxLogo+maxColor+colorSize*2+percentageWidth + \
-            tswidth+maxInfo+10+machinewidth+maxMachine+5
+
+        print(maxLogo)
+        print(maxColor)
+        print(colorSize)
+        print(percentageWidth)
+        print(maxInfo)
+        print(machinewidth)
+        print(maxMachine)
+        print(salidawidth)
+        infoSize =maxLogo+maxColor+10+colorSize*2+percentageWidth +5+tswidth+maxInfo+10+machinewidth+maxMachine+10+salidawidth+25
+        print(infoSize)
 
         addInfo = 0
         if infoSize > trimW:
@@ -417,7 +431,6 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
 
         xGen = xGen+colorSize*2+percentageWidth+5+tswidth
         y = yGen
-        maxTextWidth = 0
         p.set_graphics_option("strokecolor={ cmyk 0 0 0 1}")
 
         for index, key in enumerate(keys, start=0):
@@ -432,20 +445,20 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             textwidth = p.info_textline(textline, "width", optlist)
             p.fit_textline(textline, xGen+2, y, optlist)
 
-            if(textwidth > maxTextWidth):
-                maxTextWidth = textwidth
-
             y = y-textHeight-4
 
-        xGen = xGen+maxTextWidth+tswidth
+        # Escribo materiales
+        xGen = xGen+maxInfo+tswidth
         y = yGen
         materialwidth = p.info_textline("Material:", "width", optlist)
+        
         for mm in materialMachines:
             p.fit_textline("Maquina:", xGen-machinewidth, y, optlist)
             p.moveto(xGen-machinewidth, y-2)
             p.lineto(xGen, y-2)
             p.stroke()
             p.fit_textline(mm["machine"], xGen+2, y, optlist)
+            textwidth = p.info_textline(mm["machine"], "width", optlist)
             y = y-textHeight-4
 
             p.fit_textline("Material:", xGen-materialwidth, y, optlist)
@@ -453,9 +466,30 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             p.lineto(xGen, y-2)
             p.stroke()
             p.fit_textline(mm["material"], xGen+2, y, optlist)
+            textwidth = p.info_textline(mm["material"], "width", optlist)
             y = y-textHeight-4
 
             # imagen nalav
+
+        salida = info["salida"]+'.png'
+        print("xGen antes de salida")
+        print(xGen)
+        #Escribo salida 
+        if info["salida"] != '':
+            print("voy a hacer laa salida")
+            y = yGen
+            xGen = xGen+maxMachine+salidawidth
+            p.fit_textline("Salida:", xGen, y, optlist)
+            searchnalapath = './data/embobinado'
+            p.set_option("searchpath={" + searchnalapath + "}")
+            imgSalida = p.load_image('png',salida, "page=1")
+            imgSalidaHeight = p.info_image(
+            imgSalida, "height", "scale=0.25")
+            if imgSalida == -1:
+                print("Error: " + p.get_errmsg())
+                next
+            p.fit_image(imgSalida, xGen,y-textHeight-imgSalidaHeight-4, "scale=0.25")
+        
 
         p.close_pdi_page(page)
         p.end_page_ext("")

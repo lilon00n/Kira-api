@@ -220,7 +220,7 @@ def circles():
 
 @app.route('/oneUp', methods=['POST'])
 def makeOneUp():
-    from one_up import make
+    from one_up_eticom import make
     if request.method == 'POST':
         body = request.get_json()
         searchpath = body["searchpath"]

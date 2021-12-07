@@ -17,13 +17,13 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
     print(info)
     boxes = json.loads(boxes)
 
-    def draw_corner(p, x, y, crop_mark, weight):
+    def draw_corner( x, y, crop_mark, weight):
         p.save()
         p.translate(x, y)
         p.draw_path(crop_mark, 0, 0, "fill stroke linewidth="+str(weight))
         p.restore()
 
-    def draw_crop_marks(p, x_margin, y_margin, size, weight, dist_height, dist_width, width, height):
+    def draw_crop_marks( x_margin, y_margin, size, weight, dist_height, dist_width, width, height):
         p.set_graphics_option("linewidth="+str(weight))
 
         # Top left
@@ -38,7 +38,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             crop_mark, int(-size - dist_width), 0, "line", "")
         x = x_margin
         y = y_margin
-        draw_corner(p, x, y, crop_mark, weight)
+        draw_corner( x, y, crop_mark, weight)
 
         # Top right
         crop_mark = -1
@@ -52,7 +52,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             crop_mark, int(size + dist_width), 0, "line", "")
         x = x_margin + width
         y = y_margin
-        draw_corner(p, x, y, crop_mark, weight)
+        draw_corner(x, y, crop_mark, weight)
 
         # Bottom left
         crop_mark = -1
@@ -66,7 +66,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             crop_mark, int(-size - dist_width), 0, "line", "")
         x = x_margin
         y = y_margin - height
-        draw_corner(p, x, y, crop_mark, weight)
+        draw_corner( x, y, crop_mark, weight)
 
         # Bottom right
         crop_mark = -1
@@ -80,9 +80,9 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             crop_mark, int(size + dist_width), 0, "line", "")
         x = x_margin + width
         y = y_margin - height
-        draw_corner(p, x, y, crop_mark, weight)
+        draw_corner(x, y, crop_mark, weight)
 
-    def create_registration_mark(p, radius):
+    def create_registration_mark(radius):
         registration_mark = -1
         # Long black lines
         for step in range(0, 2, 1):
@@ -119,11 +119,126 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
 
         return registration_mark
 
-    def draw_registration_mark(p, x, y, crop_mark):
+    def draw_registration_mark(x, y, crop_mark):
         p.save()
         p.translate(x, y)
         p.draw_path(crop_mark, 0, 0, "fill stroke")
         p.restore()
+
+    def fitAndGetWidth(text,xGen, y):
+        optlist = "fontname=Arial fontsize=" + str(12) + " encoding=unicode"
+        p.fit_textline(text, xGen, y, optlist)
+        textWidth = p.info_textline(text, "width", optlist)
+        return textWidth
+
+    def drawFirstColumn( xGen,y):
+        p.set_graphics_option(
+            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 1 0.88 0}")
+        p.rect(xGen+columnWidth-5,y-rotuloHeight,  5, rotuloHeight)
+        p.fill()
+
+        y=y-rowHeight*2
+        p.set_graphics_option(
+            "strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}")
+        width = fitAndGetWidth("FECHA:", xGen, y)
+        fitAndGetWidth("la de hoy", xGen+width+5, y)
+        width = fitAndGetWidth("CONSECUTIVO:", xGen+columnWidth/2, y)
+        fitAndGetWidth(info["tsCode"], xGen+columnWidth/2+width+5, y)
+
+        y=y-rowHeight
+        width = fitAndGetWidth("No DE CLIENTE:", xGen, y)
+        fitAndGetWidth(info["clientNumber"], xGen+width+5, y)
+        width =fitAndGetWidth("COD CLIENTE:", xGen+columnWidth/2, y)
+        fitAndGetWidth(info["customerCode"], xGen+columnWidth/2+width+5, y)
+        y=y-rowHeight
+        
+        width =fitAndGetWidth("CLIENTE:", xGen, y)
+        fitAndGetWidth(info["customer"], xGen+width+5, y)
+        y=y-rowHeight
+        
+        width =fitAndGetWidth("TIPO PRODUCTO:", xGen, y)
+        fitAndGetWidth(info["productType"], xGen+width+5, y)
+        y=y-rowHeight
+
+        width =fitAndGetWidth("PRODUCTO:", xGen, y)
+        fitAndGetWidth(info["description"], xGen+width+5, y)
+        y=y-rowHeight
+
+        width =fitAndGetWidth("TIPO DE CODIGO:", xGen, y)
+        fitAndGetWidth(info["barcodeType"], xGen+width+5, y)
+        width =fitAndGetWidth("No. BARRAS:", xGen+columnWidth/2, y)
+        fitAndGetWidth(info["barcodeNumber"], xGen+columnWidth/2+width+5, y)
+
+        y=y-rowHeight
+        width =fitAndGetWidth("DISEÑADOR:", xGen, y)
+        fitAndGetWidth(info["designer"], xGen+width+5, y)
+        width =fitAndGetWidth("REVISIÓN:", xGen+columnWidth/2, y)
+        y=y-rowHeight
+
+        
+    def drawSecondColumn(xGen,y):  
+        p.set_graphics_option(
+            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 1 0.88 0}")
+        p.rect(xGen+columnWidth,y-rotuloHeight,  5, rotuloHeight)
+        p.fill()
+
+        y=y-rowHeight*2
+        optlist = "fontname=Arial fontsize=" + str(fsize) + " encoding=unicode"
+        p.set_graphics_option(
+            "strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}")
+        width=fitAndGetWidth("MEDIDA AL EJE EXTENDIDA:", xGen, y)
+        fitAndGetWidth(boxes["trimWidth"] + " mm", xGen+width+5, y)
+        y=y-rowHeight
+
+        width=fitAndGetWidth("MEDIDA AL DESARROLLO EXTENDIDA:", xGen, y)
+        fitAndGetWidth(boxes["trimHeight"] + " mm", xGen+width+5, y)
+        y=y-rowHeight
+
+        width=fitAndGetWidth("LINEA DE SUAJE:", xGen, y)
+        y=y-rowHeight
+
+        y=y-rowHeight
+        width=fitAndGetWidth("ANCHO", xGen, y)
+        fitAndGetWidth(str(info["planeWidth"]) + " mm", xGen, y+rowHeight)
+        fitAndGetWidth("X", xGen+columnWidth/4-15, y+rowHeight)
+        width=fitAndGetWidth("ALTO", xGen+columnWidth/4, y)
+        fitAndGetWidth(str(info["planeHeight"]) + " mm", xGen+columnWidth/4, y+rowHeight)
+        fitAndGetWidth("X", xGen+columnWidth/4*2-15, y+rowHeight)
+        width=fitAndGetWidth("FUELLE", xGen+columnWidth/4*2, y)
+        fitAndGetWidth(str(info["planeBellows"]) + " mm", xGen+columnWidth/4*2, y+rowHeight)
+        fitAndGetWidth("X", xGen+columnWidth/4*3-15, y+rowHeight)
+        width=fitAndGetWidth("TRASLAPE", xGen+columnWidth/4*3, y)
+        fitAndGetWidth(str(info["planeOverlap"]) + " mm", xGen+columnWidth/4*3, y+rowHeight)
+        
+        y=y-rowHeight*2
+    def drawLogoColumn(x, y):
+        p.set_graphics_option(
+            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 1 0.88 0}")
+        p.rect(x,y-rotuloHeight, columnWidth-5, rotuloHeight)
+        p.fill()
+
+        logoClient = p.load_image(client.ext, client.logo, "page=1")
+        if logoClient == -1:
+            print("Error: " + p.get_errmsg())
+            next
+    
+        # logo cliente
+        logoClientHeight = p.info_image(
+            logoClient, "height", "scale=0.35")
+        p.fit_image(logoClient, x+15,
+                    y-logoClientHeight -15, "scale=0.35 ")
+        p.close_image(logoClient)
+
+        p.set_graphics_option(
+            "strokecolor={ gray 1  } fillcolor={ gray 1 }")
+        optlist = "fontname=Arial fontsize=" + str(25) + " encoding=unicode"
+        p.fit_textline("ESPECIFICACIONES",x+15,
+                    y-logoClientHeight -50, optlist) 
+        p.fit_textline("INGENIERÍA Y DISEÑO",x+15,
+                    y-logoClientHeight -90, optlist)
+
+    def drawThirdColumn():
+        a=1
     try:
         p = PDFlib()
 
@@ -146,7 +261,10 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             print("Error: " + p.get_errmsg())
             next
 
+        endpage = p.pcos_get_number(indoc, "length:pages")
         pageopen = False
+        pagewidth = p.pcos_get_number(indoc, "pages[0]/width")
+        pageheight = p.pcos_get_number(indoc, "pages[0]/height")
         if p.begin_document(outfile, "") == -1:
             raise "Error: " + p.get_errmsg()
 
@@ -161,10 +279,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             print("Error: " + p.get_errmsg())
             next
         p.set_option("searchpath={" + searchnalapath + "}")
-        logoClient = p.load_image(client.ext, client.logo, "page=1")
-        if logoClient == -1:
-            print("Error: " + p.get_errmsg())
-            next
+        
 
         bleed0 = float(boxes["bleed"][0])
         bleed1 = float(boxes["bleed"][1])
@@ -178,17 +293,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
         nalaheight = p.pcos_get_number(nalapdf, "pages[0]/height")*0.6
         nalawidth = p.pcos_get_number(nalapdf, "pages[0]/width")*0.6
 
-        logoClientHeight = p.info_image(
-            logoClient, "height", "scale=0.05")
-        logoClientWidth = p.info_image(
-            logoClient, "width", "scale=0.05")
 
-
-
-        # maxLogo  =  nalawidth
-        maxLogo = logoClientWidth
-        titles = ["Cliente:", "Vendedor:", "Esp. técnica:", "Archivo:", "Tipo de producto:","Tipo de código:", "No. Barras","Diseñador"]
-        keys = ["customer", "salesman", "tsCode", "fileName","productType","barcodeType","barcodeNumber","designer"]
         crop_size = 8
         colorSize = 7
         fsize = 8
@@ -203,76 +308,34 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
 
         # Defino alto del rotulo
         optlist = "fontname=Arial fontsize=" + str(fsize) + " encoding=unicode"
-
         textHeight = p.info_textline("Un color", "height", optlist)
 
-        percentageWidth = p.info_textline("100.00%  ", "width", optlist)
-        tswidth = p.info_textline(" Tipo de producto:", "width", optlist)
-        machinewidth = p.info_textline("Maquina:", "width", optlist)
-        salidawidth = p.info_textline("Salida:", "width", optlist)
-        heights = []
-
-        colorsHeight = len(colorsJson)*(textHeight+8)
-        matMachHeight = len(materialMachines)*2*(textHeight+4)
-        infosHeight = len(titles)*(textHeight+4)
-
-        heights.append(nalaheight+10+logoClientHeight)
-        heights.append(infosHeight)
-        heights.append(colorsHeight)
-        heights.append(matMachHeight)
-
-        rotuloHeight = max(heights)+10
+        rotuloHeight = 232
 
         # Defino ancho del rotulo
         # Chequeo donde comenzar a escribir los colores
 
-        maxColor = 0
-        for color in colorsJson:
-            textwidth = p.info_textline(color["name"], "width", optlist)
-            if textwidth > maxColor:
-                maxColor = textwidth
-
-        maxInfo = 0
-        for index, key in enumerate(keys, start=0):
-            textwidth = p.info_textline(info[key], "width", optlist)
-            if(textwidth > maxInfo):
-                maxInfo = textwidth
-        maxMachine = 0
-        for mm in materialMachines:
-            textwidth = p.info_textline(mm["machine"], "width", optlist)
-            if(textwidth > maxMachine):
-                maxMachine = textwidth
-            textwidth = p.info_textline(mm["material"], "width", optlist)
-            if(textwidth > maxMachine):
-                maxMachine = textwidth
-
-        print(maxLogo)
-        print(maxColor)
-        print(colorSize)
-        print(percentageWidth)
-        print(maxInfo)
-        print(machinewidth)
-        print(maxMachine)
-        print(salidawidth)
-        infoSize =maxLogo+maxColor+10+colorSize*2+percentageWidth +5+tswidth+maxInfo+10+machinewidth+maxMachine+10+salidawidth+25
-        print(infoSize)
-
+        
         addInfo = 0
-        if infoSize > trimW:
-            addInfo = (infoSize-trimW)/2
+        if 1840 > trimW:
+            addInfo = (1840-trimW)/2
 
         widths = []
-        widths.append(infoSize)
+        widths.append(1840)
         widths.append(trimW)
+
+        rotuloWidth= max(widths)
+        columnWidth= 325
+        rowHeight = 23
 
         trimbox = "{ "+str(mediaExcess+cropExcess+addInfo)+" "+str(mediaExcess+rotuloHeight+cropExcess)+" "+str(
             mediaExcess+cropExcess+addInfo+trimW) + " "+str(mediaExcess+rotuloHeight+cropExcess+trimH)+" }"
         bleedbox = "{ "+str(mediaExcess+cropExcess+addInfo-bleedExcess)+" "+str(mediaExcess+rotuloHeight+cropExcess-bleedExcess)+" "+str(
             mediaExcess+cropExcess+trimW+addInfo+bleedExcess) + " "+str(mediaExcess+rotuloHeight+cropExcess+trimH+bleedExcess)+" }"
         cropbox = "{ "+str(mediaExcess)+" "+str(mediaExcess)+" "+str(mediaExcess+cropExcess *
-                                                                     2+max(widths)) + " "+str(mediaExcess+rotuloHeight+cropExcess*2+trimH)+" }"
+                                                                     2+rotuloWidth) + " "+str(mediaExcess+rotuloHeight+cropExcess*2+trimH)+" }"
 
-        mediaWidth = max(widths)+cropExcess*2+mediaExcess*2
+        mediaWidth = rotuloWidth+cropExcess*2+mediaExcess*2
         mediaHeigth = trimH+cropExcess*2+mediaExcess*2+rotuloHeight
 
         # Start a new page
@@ -290,10 +353,6 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
         p.close_pdi_page(nalapage)
         p.close_pdi_document(nalapdf)
 
-        # logo daetwyler
-        p.fit_image(logoClient, mediaExcess+cropExcess,
-                    mediaExcess+rotuloHeight-nalaheight-10-logoClientHeight, "scale=0.05")
-        p.close_image(logoClient)
 
         # Dibujo cruces de regisro
         ones = ""
@@ -304,7 +363,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
                               "} strokecolor={devicen " + str(devicen)+" " + ones + "} linewidth=0.01")
 
         # Dibujo marcas de corte
-        draw_crop_marks(p, mediaExcess+cropExcess+addInfo,  mediaExcess+rotuloHeight +
+        draw_crop_marks(mediaExcess+cropExcess+addInfo,  mediaExcess+rotuloHeight +
                         cropExcess+trimH, crop_size*72/25.4, 0.01, 0, 0, trimW, trimH)
 
         medX = mediaExcess+cropExcess+addInfo+trimW/2
@@ -318,14 +377,14 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
         hCotaHeight = p.info_textline(
             textCotaW, "height", optlist+" rotate=90")
 
-        registration_mark = create_registration_mark(p, 5)
-        draw_registration_mark(p, medX, mediaExcess+rotuloHeight+cropExcess +
+        registration_mark = create_registration_mark( 5)
+        draw_registration_mark( medX, mediaExcess+rotuloHeight+cropExcess +
                                trimH+separation+hCotaHeight/2+cruzSeparation,  registration_mark)  # Top
-        draw_registration_mark(p, medX, mediaExcess+rotuloHeight+cropExcess -
+        draw_registration_mark( medX, mediaExcess+rotuloHeight+cropExcess -
                                separation-hCotaHeight/2-cruzSeparation,  registration_mark)  # Bottom
-        draw_registration_mark(p, mediaExcess+cropExcess+addInfo -
+        draw_registration_mark( mediaExcess+cropExcess+addInfo -
                                separation-hCotaHeight/2-cruzSeparation, medY,  registration_mark)  # Left
-        draw_registration_mark(p, mediaExcess+cropExcess+addInfo+trimW +
+        draw_registration_mark( mediaExcess+cropExcess+addInfo+trimW +
                                separation+hCotaHeight/2+cruzSeparation, medY,  registration_mark)  # Right
 
         p.set_graphics_option("strokecolor={ cmyk 0 0 0 1}")
@@ -367,129 +426,20 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
         p.fit_textline(textCotaH, mediaExcess+cropExcess+addInfo -
                        cotaSeparation, medY-hCotaWidth/2, optlist)
 
-        xGen = mediaExcess+cropExcess + maxLogo + maxColor + 10
-        yGen = mediaExcess+rotuloHeight - 10
+        xGen = mediaExcess+cropExcess
+        yGen = mediaExcess+cropExcess + rotuloHeight
         y = yGen
-
-        # Dibujo colores
-        for index, color in enumerate(colorsJson, start=0):
-            ceros = ""
-            cero7 = ""
-            cero5 = ""
-            cero2 = ""
-            for x in range(len(colorsJson)):
-                if (x == index):
-                    ceros = ceros + "1 "
-                    cero7 = cero7 + "0.7 "
-                    cero5 = cero5 + "0.5 "
-                    cero2 = cero2 + "0.2 "
-                else:
-                    ceros = ceros + "0 "
-                    cero7 = cero7 + "0 "
-                    cero5 = cero5 + "0 "
-                    cero2 = cero2 + "0 "
-            optlist = "fontname=Arial fontsize=" + \
-                str(fsize) + \
-                " encoding=unicode fillcolor={devicen " + \
-                str(devicen)+" " + ceros + "}"
-            textline = color["name"]
-            textwidth = p.info_textline(textline, "width", optlist)
-
-            p.fit_textline(textline, xGen-textwidth, y, optlist)
-
-            p.fit_textline(color["inkCov"]+"%", xGen+20, y, optlist)
-            p.set_graphics_option(
-                "fillcolor={ devicen " + str(devicen)+" " + ceros + "}")
-            p.rect(xGen+2, y+4, colorSize, 4)
-            p.fill()
-            p.set_graphics_option(
-                "fillcolor={ devicen " + str(devicen)+" " + cero7 + "}")
-            p.rect(xGen+2, y, colorSize, 4)
-            p.fill()
-            p.set_graphics_option(
-                "fillcolor={ devicen " + str(devicen)+" " + cero5 + "}")
-            p.rect(xGen+2+colorSize, y+4, colorSize, 4)
-            p.fill()
-            p.set_graphics_option(
-                "fillcolor={ devicen " + str(devicen)+" " + cero2 + "}")
-            p.rect(xGen+2+colorSize, y, colorSize, 4)
-            p.fill()
-
-            p.set_graphics_option(
-                "strokecolor={ devicen " + str(devicen)+" " + ceros + "}")
-
-            # Dibujo la linea separdora
-            p.moveto(2*crop_size*72/25.4 + maxLogo, y-2)
-            p.lineto(xGen + colorSize*2+percentageWidth, y-2)
-            p.stroke()
-
-            y = y-textHeight-8
-
-        # Escribo infos
-        optlist = "fontname=Arial fontsize=" + \
-            str(fsize)+" encoding=unicode fillcolor={ Black }"
-
-        xGen = xGen+colorSize*2+percentageWidth+5+tswidth
-        y = yGen
-        p.set_graphics_option("strokecolor={ cmyk 0 0 0 1}")
-
-        for index, key in enumerate(keys, start=0):
-            textline = titles[index]
-            textwidth = p.info_textline(textline, "width", optlist)
-            p.fit_textline(textline, xGen-textwidth, y, optlist)
-
-            p.moveto(xGen-textwidth, y-2)
-            p.lineto(xGen, y-2)
-            p.stroke()
-            textline = info[key]
-            textwidth = p.info_textline(textline, "width", optlist)
-            p.fit_textline(textline, xGen+2, y, optlist)
-
-            y = y-textHeight-4
-
-        # Escribo materiales
-        xGen = xGen+maxInfo+tswidth
-        y = yGen
-        materialwidth = p.info_textline("Material:", "width", optlist)
         
-        for mm in materialMachines:
-            p.fit_textline("Maquina:", xGen-machinewidth, y, optlist)
-            p.moveto(xGen-machinewidth, y-2)
-            p.lineto(xGen, y-2)
-            p.stroke()
-            p.fit_textline(mm["machine"], xGen+2, y, optlist)
-            textwidth = p.info_textline(mm["machine"], "width", optlist)
-            y = y-textHeight-4
+        drawLogoColumn( xGen,y)
+        drawFirstColumn( xGen+10+columnWidth,y)
+        drawSecondColumn( xGen+20+columnWidth*2,y)
+        #Espacio del rotulo
+        p.set_graphics_option(
+            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 0 0 1} linewidth=5")
+        p.rect(xGen,mediaExcess+cropExcess, rotuloWidth, rotuloHeight)
+        p.stroke()
 
-            p.fit_textline("Material:", xGen-materialwidth, y, optlist)
-            p.moveto(xGen-materialwidth, y-2)
-            p.lineto(xGen, y-2)
-            p.stroke()
-            p.fit_textline(mm["material"], xGen+2, y, optlist)
-            textwidth = p.info_textline(mm["material"], "width", optlist)
-            y = y-textHeight-4
 
-            # imagen nalav
-
-        salida = info["salida"]+'.png'
-        print("xGen antes de salida")
-        print(xGen)
-        #Escribo salida 
-        if info["salida"] != '':
-            print("voy a hacer laa salida")
-            y = yGen
-            xGen = xGen+maxMachine+salidawidth
-            p.fit_textline("Salida:", xGen, y, optlist)
-            searchnalapath = './data/embobinado'
-            p.set_option("searchpath={" + searchnalapath + "}")
-            imgSalida = p.load_image('png',salida, "page=1")
-            imgSalidaHeight = p.info_image(
-            imgSalida, "height", "scale=0.25")
-            if imgSalida == -1:
-                print("Error: " + p.get_errmsg())
-                next
-            p.fit_image(imgSalida, xGen,y-textHeight-imgSalidaHeight-4, "scale=0.25")
-        
 
         p.close_pdi_page(page)
         p.end_page_ext("")
