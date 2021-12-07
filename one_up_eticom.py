@@ -211,6 +211,103 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
         fitAndGetWidth(str(info["planeOverlap"]) + " mm", xGen+columnWidth/4*3, y+rowHeight)
         
         y=y-rowHeight*2
+    
+    def drawThirdColumn(xGen, y):
+        optlist = "fontname=Arial fontsize=" + str(17) + " encoding=unicode"
+        tintasHeight = p.info_textline("TINTAS:", "height", optlist)
+        tintasWidth = p.info_textline("TINTAS:", "width", optlist)
+        cantHeight = p.info_textline("04", "height",  "fontname=Arial fontsize=" + str(20) + " encoding=unicode")
+        cantWidth = p.info_textline("04", "width",  "fontname=Arial fontsize=" + str(20) + " encoding=unicode")
+
+
+        p.set_graphics_option(
+            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 1 0.88 0}")
+        p.rect(xGen+columnWidth-5,y-rotuloHeight,  5, rotuloHeight-tintasHeight*5)
+        p.fill()
+
+        
+        p.set_graphics_option(
+            "strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}")
+        y=y-tintasHeight-5
+        p.fit_textline("TINTAS:", xGen, y-tintasHeight, optlist)
+        y=y-tintasHeight-10
+        optlist = "fontname=Arial fontsize=" + str(20) + " encoding=unicode"
+        p.fit_textline("0"+str(len(colorsJson)), xGen+tintasWidth/2-cantWidth/2, y-cantHeight, optlist)
+
+
+        startedY=y-cantHeight
+        xGen=xGen+tintasWidth+10
+        # Dibujo colores
+        for index, color in enumerate(colorsJson, start=0):
+            ceros = ""
+            for x in range(len(colorsJson)):
+                if (x == index):
+                    ceros = ceros + "1 "
+                else:
+                    ceros = ceros + "0 "
+            optlist = "fontname=Arial fontsize=" + \
+                str(fsize) + \
+                " encoding=unicode fillcolor={devicen " + \
+                str(devicen)+" " + ceros + "}"
+            textline = color["name"]
+            textwidth = p.info_textline(textline, "width", optlist)
+            textheight= p.info_textline(textline, "height", optlist)
+
+            # p.fit_textline(textline, xGen-textwidth, y, optlist)
+
+            # p.fit_textline(color["inkCov"]+"%", xGen+20, y, optlist)
+            p.set_graphics_option(
+                "fillcolor={ devicen " + str(devicen)+" " + ceros + "}")
+            p.rect(xGen+2, y+4, colorSize, colorSize) 
+            p.fill()
+            p.fit_textline(textline, xGen+2, y-textheight, optlist)
+
+            p.fit_textline(color["inkCov"]+"%", xGen+2, y-5-textheight*2, optlist)
+            
+
+            p.set_graphics_option(
+                "strokecolor={ devicen " + str(devicen)+" " + ceros + "}")
+
+            # # Dibujo la linea separdora
+            # p.moveto(2*crop_size*72/25.4 + maxLogo, y-2)
+            # p.lineto(xGen + colorSize*2+percentageWidth, y-2)
+            # p.stroke()
+
+            # y = y-textHeight-8
+
+            xGen=xGen+textwidth+20
+        return startedY
+
+    def drawFourthColumn(xGen, y):
+        optlist = "fontname=Arial fontsize=" + str(fsize) + " encoding=unicode"
+        y=y-rowHeight*2
+        p.set_graphics_option(
+            "strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}")
+        width=fitAndGetWidth("FORMATO DE ENTREGA:", xGen, y)
+        fitAndGetWidth(info["deliverable"], xGen+width+5, y)
+        y=y-rowHeight
+
+        salida = info["salida"]+'.png'
+        print("xGen antes de salida")
+        print(xGen)
+        #Escribo salida 
+        if info["salida"] != '':
+            print("voy a hacer laa salida")
+            xGen = xGen+20
+            p.fit_textline("SALIDA:", xGen, y, optlist)
+            searchnalapath = './data/embobinado'
+            p.set_option("searchpath={" + searchnalapath + "}")
+            imgSalida = p.load_image('png',salida, "page=1")
+            imgSalidaHeight = p.info_image(
+            imgSalida, "height", "scale=0.25")
+            if imgSalida == -1:
+                print("Error: " + p.get_errmsg())
+                next
+            p.fit_image(imgSalida, xGen,y-textHeight-imgSalidaHeight-4, "scale=0.25")
+        
+
+
+
     def drawLogoColumn(x, y):
         p.set_graphics_option(
             "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 1 0.88 0}")
@@ -236,9 +333,8 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
                     y-logoClientHeight -50, optlist) 
         p.fit_textline("INGENIERÍA Y DISEÑO",x+15,
                     y-logoClientHeight -90, optlist)
-
-    def drawThirdColumn():
-        a=1
+    
+    
     try:
         p = PDFlib()
 
@@ -295,7 +391,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
 
 
         crop_size = 8
-        colorSize = 7
+        colorSize = 26
         fsize = 8
         separation = 4
         cotaSeparation = 5*72/25.4  # 12mm del trim,
@@ -319,14 +415,14 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
         addInfo = 0
         if 1840 > trimW:
             addInfo = (1840-trimW)/2
-
+        columnWidth= 325
+        rowHeight = 23
         widths = []
-        widths.append(1840)
+        widths.append(columnWidth*6)
         widths.append(trimW)
 
         rotuloWidth= max(widths)
-        columnWidth= 325
-        rowHeight = 23
+        
 
         trimbox = "{ "+str(mediaExcess+cropExcess+addInfo)+" "+str(mediaExcess+rotuloHeight+cropExcess)+" "+str(
             mediaExcess+cropExcess+addInfo+trimW) + " "+str(mediaExcess+rotuloHeight+cropExcess+trimH)+" }"
@@ -431,8 +527,10 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
         y = yGen
         
         drawLogoColumn( xGen,y)
-        drawFirstColumn( xGen+10+columnWidth,y)
-        drawSecondColumn( xGen+20+columnWidth*2,y)
+        drawFirstColumn( xGen+(10+columnWidth),y)
+        drawSecondColumn( xGen+(10+columnWidth)*2,y)
+        nextY=drawThirdColumn( xGen+(10+columnWidth)*3,y)
+        drawFourthColumn( xGen+(10+columnWidth)*4,nextY)
         #Espacio del rotulo
         p.set_graphics_option(
             "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 0 0 1} linewidth=5")
