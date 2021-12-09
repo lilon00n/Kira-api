@@ -225,12 +225,13 @@ def makeOneUp():
         body = request.get_json()
         searchpath = body["searchpath"]
         pdffile = body["pdffile"]
+        planefile = body["planefile"]
         outfile = body["outfile"]
         client = body["client"]
         boxes = json.dumps(body["boxes"])
         colors = body["colors"]
         info = json.dumps(body["info"])
-        make(searchpath, pdffile, outfile, client, boxes, colors, info)
+        make(searchpath, pdffile, planefile, outfile, client, boxes, colors, info)
         return "ok"
 
 
