@@ -6,7 +6,7 @@ from make_devicen import make_devicen
 from clients import findClient
 
 
-def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, info):
+def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, info, separationsFolder, pathImages,names):
     client = findClient(client)
     paths = outfile.split("\\")
     if len(paths) == 1:
@@ -15,6 +15,8 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
     p = None
     info = json.loads(info)
     print(info)
+    print(separationsFolder)
+    print(pathImages)
     boxes = json.loads(boxes)
 
     def draw_corner( x, y, crop_mark, weight):
@@ -389,6 +391,8 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
             print("Error: " + p.get_errmsg())
             next
         if info["oneUpType"] != 'none':
+            print("2")
+            print(planefile) 
             plano = p.open_pdi_document(planefile, "")
             if plano == -1:
                 print("Error: " + p.get_errmsg())
@@ -401,13 +405,18 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
             raise "Error: " + p.get_errmsg()
 
         # Loop over all pages of the input document
+        print("3")
+        print(unitario)
 
         page = p.open_pdi_page(unitario, 1, "pdiusebox=bleed")
         if page == -1:
             print("Error: " + p.get_errmsg())
             next
+        print("4")
         if info["oneUpType"] != 'none':
+            print("5")
             planePage = p.open_pdi_page(plano, 1, "pdiusebox=bleed")
+            print("5")
             if planePage == -1:
                 print("Error: " + p.get_errmsg())
                 next
@@ -486,7 +495,8 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
                        mediaExcess+rotuloHeight+50+cropExcess+despY, "")
 
         # plano
-        p.fit_pdi_page(planePage, mediaExcess+cropExcess+addInfo+despX,
+        if info["oneUpType"] != 'none':
+            p.fit_pdi_page(planePage, mediaExcess+cropExcess+addInfo+despX,
                        mediaExcess+rotuloHeight+50+cropExcess+despY, "")
         # nala
         # p.fit_pdi_page(nalapage, mediaExcess+cropExcess,
@@ -587,6 +597,24 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
 
         p.close_pdi_page(page)
         p.end_page_ext("")
+        #agrego las demas paginas con las separaciones
+        for index, image in enumerate(pathImages, start=0):
+            tif = p.load_image("tiff", separationsFolder+image, "page=1")
+            if tif == -1:
+                print("Error: " + p.get_errmsg())
+                next
+
+            # Start a new page
+            p.begin_page_ext(float(pagewidth), float(pageheight)+10, "")
+            p.fit_image(tif, 0.0, 10, "adjustpage")
+            p.close_image(tif)
+            optlist = "fontname=Helvetica fontsize=10 encoding=unicode  fillcolor={ Black }"
+
+            textline = names[index]
+            p.fit_textline(textline, 0, 0, optlist)
+            p.end_page_ext("")
+            print(image)
+        
         p.close_pdi_document(unitario)
         p.end_document("")
 
