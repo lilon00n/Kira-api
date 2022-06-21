@@ -220,21 +220,22 @@ def circles():
 
 @app.route('/oneUp', methods=['POST'])
 def makeOneUp():
-    from one_up_eticom import make
+    from one_up import make
     if request.method == 'POST':
         body = request.get_json()
         searchpath = body["searchpath"]
         pdffile = body["pdffile"]
-        planefile = body["planefile"]
+        # planefile = body["planefile"]
         outfile = body["outfile"]
         client = body["client"]
         boxes = json.dumps(body["boxes"])
         colors = body["colors"]
         info = json.dumps(body["info"])
-        separationsFolder = body["separationsFolder"]
-        pathImages = body["pathImages"]
-        names = body["names"]
-        make(searchpath, pdffile, planefile, outfile, client, boxes, colors, info,separationsFolder, pathImages,names)
+        # separationsFolder = body["separationsFolder"]
+        # pathImages =  body["pathImages"]
+        # names = body["names"]
+        # make(searchpath, pdffile, planefile, outfile, client, boxes, colors, info,separationsFolder, pathImages,names)
+        make(searchpath, pdffile,  outfile, client, boxes, colors, info)
         return "ok"
 
 
