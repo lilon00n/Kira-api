@@ -4,7 +4,7 @@ block_cipher = None
 
 
 a = Analysis(['api.py'],
-             pathex=['/Users/aldanaveronruizdiaz/Documents/Proyectos/kira-api'],
+             pathex=['C:\\Users\\Lilo\\kira-api'],
              binaries=[],
              datas=[],
              hiddenimports=[],
