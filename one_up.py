@@ -485,16 +485,18 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             imgSalida = p.load_image('png',salida, "page=1")
             imgSalidaHeight = p.info_image(
             imgSalida, "height", "scale=0.25")
+            
             if imgSalida == -1:
                 print("Error: " + p.get_errmsg())
                 next
             p.fit_image(imgSalida, xGen,y-textHeight-imgSalidaHeight-4, "scale=0.25")
-        
-
+            
         p.close_pdi_page(page)
         p.end_page_ext("")
         p.close_pdi_document(indoc)
+        print("10")
         p.end_document("")
+        print("11")
 
     except PDFlibException as ex:
         print("PDFlib exception occurred:")
@@ -506,3 +508,4 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
     finally:
         if p:
             p.delete()
+            print("12")

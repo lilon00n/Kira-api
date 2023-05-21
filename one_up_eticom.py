@@ -1,6 +1,7 @@
 
 import sys
 import json
+import datetime
 from PDFlib.PDFlib import *
 from make_devicen import make_devicen
 from clients import findClient
@@ -140,16 +141,12 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
         return textWidth
 
     def drawFirstColumn( xGen,y):
-        p.set_graphics_option(
-            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 1 0.88 0}")
-        p.rect(xGen+columnWidth-5,y-rotuloHeight,  5, rotuloHeight)
-        p.fill()
-
         y=y-rowHeight*2
         p.set_graphics_option(
             "strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}")
         width = fitAndGetWidth("FECHA:", xGen, y,xGen+columnWidth/2,1)
-        fitAndGetWidth("la de hoy", xGen+width+5, y, xGen+columnWidth/2, 2)
+        today = datetime.datetime.now()
+        fitAndGetWidth(today.strftime("%x"), xGen+width+5, y, xGen+columnWidth/2, 2)
         width = fitAndGetWidth("CONSECUTIVO:", xGen+columnWidth/2, y, xGen+columnWidth, 1)
         fitAndGetWidth(info["tsCode"], xGen+columnWidth/2+width+5, y, xGen+columnWidth, 2)
 
@@ -184,11 +181,6 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
         y=y-rowHeight
         
     def drawSecondColumn(xGen,y):  
-        p.set_graphics_option(
-            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 1 0.88 0}")
-        p.rect(xGen+columnWidth,y-rotuloHeight,  5, rotuloHeight)
-        p.fill()
-
         y=y-rowHeight*2
         x=xGen+10
         optlist = "fontname=Arial fontsize=" + str(fsize) + " encoding=unicode"
@@ -229,12 +221,6 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
         tintasWidth = p.info_textline("TINTAS:", "width", optlist)
         cantHeight = p.info_textline("04", "height",  "fontname=Arial fontsize=" + str(20) + " encoding=unicode")
         cantWidth = p.info_textline("04", "width",  "fontname=Arial fontsize=" + str(20) + " encoding=unicode")
-
-
-        p.set_graphics_option(
-            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 1 0.88 0}")
-        p.rect(xGen+columnWidth-5,y-rotuloHeight,  5, rotuloHeight-tintasHeight*5)
-        p.fill()
 
         x=xGen+10
 
@@ -306,11 +292,6 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
         return startedY
 
     def drawFourthColumn(xGen, y):
-        p.set_graphics_option(
-            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 1 0.88 0}")
-        p.rect(xGen+columnWidth-5,mediaExcess+cropExcess,  5, rotuloHeight)
-        p.fill()
-
         optlist = "fontname=Arial fontsize=" + str(fsize) + " encoding=unicode"
         y=y-rowHeight*2
         p.set_graphics_option(
@@ -350,10 +331,7 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
         p.close_image(terminos)
 
     def drawLogoColumn(x, y):
-        p.set_graphics_option(
-            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 1 0.88 0}")
-        p.rect(x,y-rotuloHeight, columnWidth-5, rotuloHeight)
-        p.fill()
+
         p.set_option("searchpath={" + searchnalapath + "}")
         logoClient = p.load_image(client.ext, client.logo, "page=1")
         if logoClient == -1:
@@ -362,9 +340,9 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
     
         # logo cliente
         logoClientHeight = p.info_image(
-            logoClient, "height", "scale=1.2")
+            logoClient, "height", "scale=0.2")
         p.fit_image(logoClient, x+15,
-                    y-logoClientHeight -15, "scale=1.2 ")
+                    y-logoClientHeight -15, "scale=0.2 ")
         p.close_image(logoClient)
 
         p.set_graphics_option(
@@ -468,7 +446,8 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
         columnWidth= 325
         rowHeight = 23
         widths = []
-        widths.append(columnWidth*6)
+        #widths.append(columnWidth*6)
+        widths.append(columnWidth*5)
         widths.append(trimW)
 
         rotuloWidth= max(widths)
@@ -586,12 +565,12 @@ def make(searchpath, pdffile, planefile, outfile, client, boxes, colorsJson, inf
         drawSecondColumn( xGen+(columnWidth)*2,y)
         nextY=drawThirdColumn( xGen+(columnWidth)*3,y)
         drawFourthColumn( xGen+(columnWidth)*4,nextY)
-        drawLastColumn( xGen+(columnWidth)*5,y)
+        #drawLastColumn( xGen+(columnWidth)*5,y)
         #Espacio del rotulo
-        p.set_graphics_option(
-            "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 0 0 1} linewidth=5")
-        p.rect(xGen,mediaExcess+cropExcess, rotuloWidth, rotuloHeight)
-        p.stroke()
+        #p.set_graphics_option(
+        #    "strokecolor={ cmyk 0 1 0.88 0} fillcolor={ cmyk 0 0 0 1} linewidth=5")
+        #p.rect(xGen,mediaExcess+cropExcess, rotuloWidth, rotuloHeight)
+        #p.stroke()
 
 
 
