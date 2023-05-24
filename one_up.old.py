@@ -5,6 +5,113 @@ from PDFlib.PDFlib import *
 from make_devicen import make_devicen
 from clients import findClient
 
+def draw_corner(p, x, y, crop_mark, weight):
+    p.save()
+    p.translate(x, y)
+    p.draw_path(crop_mark, 0, 0, "fill stroke linewidth="+str(weight))
+    p.restore()
+
+def draw_crop_marks(p, x_margin, y_margin, size, weight, dist_height, dist_width, width, height):
+    p.set_graphics_option("linewidth="+str(weight))
+
+    # Top left
+    crop_mark = -1
+    crop_mark = p.add_path_point(crop_mark, 0, int(
+        dist_height), "move", "stroke nofill")
+    crop_mark = p.add_path_point(
+        crop_mark, 0, int(size + dist_height), "line", "")
+    crop_mark = p.add_path_point(
+        crop_mark, int(-dist_width), 0, "move", "stroke nofill")
+    crop_mark = p.add_path_point(
+        crop_mark, int(-size - dist_width), 0, "line", "")
+    x = x_margin
+    y = y_margin
+    draw_corner(p, x, y, crop_mark, weight)
+
+    # Top right
+    crop_mark = -1
+    crop_mark = p.add_path_point(crop_mark, 0, int(
+        dist_height), "move", "stroke nofill")
+    crop_mark = p.add_path_point(
+        crop_mark, 0, int(size + dist_height), "line", "")
+    crop_mark = p.add_path_point(crop_mark, int(
+        dist_width), 0, "move", "stroke nofill")
+    crop_mark = p.add_path_point(
+        crop_mark, int(size + dist_width), 0, "line", "")
+    x = x_margin + width
+    y = y_margin
+    draw_corner(p, x, y, crop_mark, weight)
+
+    # Bottom left
+    crop_mark = -1
+    crop_mark = p.add_path_point(
+        crop_mark, 0, int(-dist_height), "move", "stroke nofill")
+    crop_mark = p.add_path_point(
+        crop_mark, 0, int(-size - dist_height), "line", "")
+    crop_mark = p.add_path_point(
+        crop_mark, int(-dist_width), 0, "move", "stroke nofill")
+    crop_mark = p.add_path_point(
+        crop_mark, int(-size - dist_width), 0, "line", "")
+    x = x_margin
+    y = y_margin - height
+    draw_corner(p, x, y, crop_mark, weight)
+
+    # Bottom right
+    crop_mark = -1
+    crop_mark = p.add_path_point(
+        crop_mark, 0, int(-dist_height), "move", "stroke nofill")
+    crop_mark = p.add_path_point(
+        crop_mark, 0, int(-size - dist_height), "line", "")
+    crop_mark = p.add_path_point(crop_mark, int(
+        dist_width), 0, "move", "stroke nofill")
+    crop_mark = p.add_path_point(
+        crop_mark, int(size + dist_width), 0, "line", "")
+    x = x_margin + width
+    y = y_margin - height
+    draw_corner(p, x, y, crop_mark, weight)
+
+def create_registration_mark(p, radius):
+    registration_mark = -1
+    # Long black lines
+    for step in range(0, 2, 1):
+        registration_mark = p.add_path_point(registration_mark,
+                                                radius, step * 90,
+                                                "move", "stroke nofill  polar")
+        registration_mark = p.add_path_point(registration_mark,
+                                                radius, (step + 2) * 90, "line", "polar")
+
+    # Inner circle
+    registration_mark = p.add_path_point(registration_mark,
+                                            -radius / 3, 0, "move",
+                                            "fill nostroke ")
+    registration_mark = p.add_path_point(registration_mark,
+                                            radius / 3, 0, "control", "")
+    registration_mark = p.add_path_point(registration_mark,
+                                            -radius / 3, 0, "circular", "")
+
+    # Short white lines
+    for step in range(0, 2, 1):
+        registration_mark = p.add_path_point(registration_mark, radius / 3, step * 90,
+                                                "move", "stroke nofill strokecolor={gray 1} polar")
+        registration_mark = p.add_path_point(registration_mark,
+                                                radius / 3, (step + 2) * 90, "line", "polar")
+
+    # Outer circle
+    registration_mark = p.add_path_point(registration_mark, -2
+                                            * radius / 3, 0, "move",
+                                            "stroke nofill ")
+    registration_mark = p.add_path_point(registration_mark,
+                                            2 * radius / 3, 0, "control", "")
+    registration_mark = p.add_path_point(registration_mark, -2
+                                            * radius / 3, 0, "circular", "")
+
+    return registration_mark
+
+def draw_registration_mark(p, x, y, crop_mark):
+    p.save()
+    p.translate(x, y)
+    p.draw_path(crop_mark, 0, 0, "fill stroke")
+    p.restore()
 
 def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
     client = findClient(client)
@@ -16,114 +123,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
     info = json.loads(info)
     print(info)
     boxes = json.loads(boxes)
-
-    def draw_corner(p, x, y, crop_mark, weight):
-        p.save()
-        p.translate(x, y)
-        p.draw_path(crop_mark, 0, 0, "fill stroke linewidth="+str(weight))
-        p.restore()
-
-    def draw_crop_marks(p, x_margin, y_margin, size, weight, dist_height, dist_width, width, height):
-        p.set_graphics_option("linewidth="+str(weight))
-
-        # Top left
-        crop_mark = -1
-        crop_mark = p.add_path_point(crop_mark, 0, int(
-            dist_height), "move", "stroke nofill")
-        crop_mark = p.add_path_point(
-            crop_mark, 0, int(size + dist_height), "line", "")
-        crop_mark = p.add_path_point(
-            crop_mark, int(-dist_width), 0, "move", "stroke nofill")
-        crop_mark = p.add_path_point(
-            crop_mark, int(-size - dist_width), 0, "line", "")
-        x = x_margin
-        y = y_margin
-        draw_corner(p, x, y, crop_mark, weight)
-
-        # Top right
-        crop_mark = -1
-        crop_mark = p.add_path_point(crop_mark, 0, int(
-            dist_height), "move", "stroke nofill")
-        crop_mark = p.add_path_point(
-            crop_mark, 0, int(size + dist_height), "line", "")
-        crop_mark = p.add_path_point(crop_mark, int(
-            dist_width), 0, "move", "stroke nofill")
-        crop_mark = p.add_path_point(
-            crop_mark, int(size + dist_width), 0, "line", "")
-        x = x_margin + width
-        y = y_margin
-        draw_corner(p, x, y, crop_mark, weight)
-
-        # Bottom left
-        crop_mark = -1
-        crop_mark = p.add_path_point(
-            crop_mark, 0, int(-dist_height), "move", "stroke nofill")
-        crop_mark = p.add_path_point(
-            crop_mark, 0, int(-size - dist_height), "line", "")
-        crop_mark = p.add_path_point(
-            crop_mark, int(-dist_width), 0, "move", "stroke nofill")
-        crop_mark = p.add_path_point(
-            crop_mark, int(-size - dist_width), 0, "line", "")
-        x = x_margin
-        y = y_margin - height
-        draw_corner(p, x, y, crop_mark, weight)
-
-        # Bottom right
-        crop_mark = -1
-        crop_mark = p.add_path_point(
-            crop_mark, 0, int(-dist_height), "move", "stroke nofill")
-        crop_mark = p.add_path_point(
-            crop_mark, 0, int(-size - dist_height), "line", "")
-        crop_mark = p.add_path_point(crop_mark, int(
-            dist_width), 0, "move", "stroke nofill")
-        crop_mark = p.add_path_point(
-            crop_mark, int(size + dist_width), 0, "line", "")
-        x = x_margin + width
-        y = y_margin - height
-        draw_corner(p, x, y, crop_mark, weight)
-
-    def create_registration_mark(p, radius):
-        registration_mark = -1
-        # Long black lines
-        for step in range(0, 2, 1):
-            registration_mark = p.add_path_point(registration_mark,
-                                                 radius, step * 90,
-                                                 "move", "stroke nofill  polar")
-            registration_mark = p.add_path_point(registration_mark,
-                                                 radius, (step + 2) * 90, "line", "polar")
-
-        # Inner circle
-        registration_mark = p.add_path_point(registration_mark,
-                                             -radius / 3, 0, "move",
-                                             "fill nostroke ")
-        registration_mark = p.add_path_point(registration_mark,
-                                             radius / 3, 0, "control", "")
-        registration_mark = p.add_path_point(registration_mark,
-                                             -radius / 3, 0, "circular", "")
-
-        # Short white lines
-        for step in range(0, 2, 1):
-            registration_mark = p.add_path_point(registration_mark, radius / 3, step * 90,
-                                                 "move", "stroke nofill strokecolor={gray 1} polar")
-            registration_mark = p.add_path_point(registration_mark,
-                                                 radius / 3, (step + 2) * 90, "line", "polar")
-
-        # Outer circle
-        registration_mark = p.add_path_point(registration_mark, -2
-                                             * radius / 3, 0, "move",
-                                             "stroke nofill ")
-        registration_mark = p.add_path_point(registration_mark,
-                                             2 * radius / 3, 0, "control", "")
-        registration_mark = p.add_path_point(registration_mark, -2
-                                             * radius / 3, 0, "circular", "")
-
-        return registration_mark
-
-    def draw_registration_mark(p, x, y, crop_mark):
-        p.save()
-        p.translate(x, y)
-        p.draw_path(crop_mark, 0, 0, "fill stroke")
-        p.restore()
+    
     try:
         p = PDFlib()
 
