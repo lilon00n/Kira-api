@@ -231,11 +231,11 @@ def makeOneUp():
         boxes = json.dumps(body["boxes"])
         colors = body["colors"]
         info = json.dumps(body["info"])
-        # separationsFolder = body["separationsFolder"]
-        # pathImages =  body["pathImages"]
-        # names = body["names"]
-        # make(searchpath, pdffile, planefile, outfile, client, boxes, colors, info,separationsFolder, pathImages,names)
-        make(searchpath, pdffile,  outfile, client, boxes, colors, info)
+        separationsFolder = body["separationsFolder"]
+        pathImages =  body["pathImages"]
+        names = body["names"]
+        make(searchpath, pdffile, outfile, client, boxes, colors, info,separationsFolder, pathImages, names)
+        # make(searchpath, pdffile,  outfile, client, boxes, colors, info)
         return "ok"
 
 

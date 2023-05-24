@@ -534,11 +534,31 @@ def get_logo_client(p, client):
 
 def get_pdf_unitario(p, pdffile, searchpath) :
     p.set_option("searchpath={" + searchpath + "}")
-    indoc = load_pdf_document(p, pdffile)
-    page = get_pdf_page(p, indoc, "pdiusebox=bleed")
-    return indoc, page
+    unitario = load_pdf_document(p, pdffile)
+    page = get_pdf_page(p, unitario, "pdiusebox=bleed")
+    unitario_height = p.pcos_get_number(unitario, "pages[0]/height")
+    unitario_width = p.pcos_get_number(unitario, "pages[0]/width")
+    return unitario, page, unitario_height,unitario_width
 
-def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
+def add_separation_pages(p, separations_folder, path_images, names, width, height):
+    for index, image in enumerate(path_images, start=0):
+        tif = p.load_image("tiff", separations_folder+image, "page=1")
+        if tif == -1:
+            print("Error: " + p.get_errmsg())
+            next
+
+        # Start a new page
+        p.begin_page_ext(float(width), float(height)+10, "")
+        p.fit_image(tif, 0.0, 10, "adjustpage")
+        p.close_image(tif)
+        optlist = "fontname=Helvetica fontsize=10 encoding=unicode  fillcolor={ Black }"
+
+        textline = names[index]
+        p.fit_textline(textline, 0, 0, optlist)
+        p.end_page_ext("")
+        print(image)
+
+def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info, separations_folder, path_images, names):
     client, title, boxes, info = load_body_information(client, outfile, boxes, info)
 
     try:
@@ -554,12 +574,8 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
 
         # Get Nala PDF for label
         nalapdf, nalapage, nala_height = get_nala_pdf(p)
-
         # Open the input PDF unitario */
-        indoc, page = get_pdf_unitario(p, pdffile, searchpath)
-
-        
-
+        unitario, page, unitario_height, unitario_width = get_pdf_unitario(p, pdffile, searchpath)
         # Open client logo
         logo_client, logo_client_height = get_logo_client(p, client)
 
@@ -567,7 +583,6 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
         trimW, trimH = get_trim_size(boxes)
     
         devicen = make_devicen(p, colorsJson)
-        
         
         # Define height for the label
         label_height = get_label_height(p, colorsJson, info, nala_height, logo_client)    
@@ -581,13 +596,13 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
         trimbox, bleedbox, cropbox = get_boxes_size(label_height, trimW, trimH, total_width, add_info)
 
         mediaWidth = total_width+CROP_EXCESS*2+MEDIA_EXCESS*2
-        mediaHeigth = trimH+label_height+CROP_EXCESS*2+MEDIA_EXCESS*2
+        mediaHeight = trimH+label_height+CROP_EXCESS*2+MEDIA_EXCESS*2
 
         max_logo = get_logo_width(p, logo_client)
 
         # Start a new page
         if not pageopen:
-            p.begin_page_ext(mediaWidth, mediaHeigth, "trimbox=" +
+            p.begin_page_ext(mediaWidth, mediaHeight, "trimbox=" +
                              trimbox+" bleedbox="+bleedbox+" cropbox="+cropbox)
             pageopen = True
 
@@ -645,7 +660,11 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info):
             
         p.close_pdi_page(page)
         p.end_page_ext("")
-        p.close_pdi_document(indoc)
+
+        #agrego las demas paginas con las separaciones
+        add_separation_pages(p, separations_folder, path_images, names, unitario_width, unitario_height)
+        
+        p.close_pdi_document(unitario)
         p.end_document("")
 
     except PDFlibException as ex:
