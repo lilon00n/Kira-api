@@ -1,0 +1,81 @@
+<!-- ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+(c) PDFlib GmbH 2008-2014 www.pdflib.com
+
+Sample XMP metadata which can be inserted in a PDF document.
+
+This sample demonstrates XMP metadata for the Ghent Workgroup (GWG)
+Ad Ticket schema for including advertisement metadata in PDF, see
+www.gwg.org/download/job-tickets/
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+<rdf:Description rdf:about="" xmlns:gwg-spt="http://gwg.org/spt/xmlns/">
+<gwg-spt:ProofingApprovals>
+<rdf:Seq>
+	<rdf:li rdf:parseType="Resource">
+		<gwg-spt:UsePDFXOutputCondition>true</gwg-spt:UsePDFXOutputCondition>
+		<gwg-spt:ProofingUserName>Thomas Merz</gwg-spt:ProofingUserName>
+		<gwg-spt:ProofingUserLogin>thomas.merz</gwg-spt:ProofingUserLogin>
+		<gwg-spt:ProofingSoftwarePlatform>Mac OS X</gwg-spt:ProofingSoftwarePlatform>
+		<gwg-spt:ProofingSoftwareVendor>ABC</gwg-spt:ProofingSoftwareVendor>
+		<gwg-spt:ProofingSoftwareMake>Distant Proofer</gwg-spt:ProofingSoftwareMake>
+		<gwg-spt:ProofingSoftwareVersion>3.0</gwg-spt:ProofingSoftwareVersion>
+		<gwg-spt:ProofingApprovalStatus>Approved</gwg-spt:ProofingApprovalStatus>
+		<gwg-spt:ProofingApprovalDate>2014-11-21T16:27:34+01:00</gwg-spt:ProofingApprovalDate>
+		<gwg-spt:ProofingDevices>
+			<rdf:Seq>
+			<rdf:li rdf:parseType="Resource">
+				<gwg-spt:ProofingDeviceCalibrated>true</gwg-spt:ProofingDeviceCalibrated>
+				<gwg-spt:ProofingDeviceCalibrationDate>2014-11-11T16:27:34+01:00</gwg-spt:ProofingDeviceCalibrationDate>
+				<gwg-spt:ProofingDeviceLuminance>183</gwg-spt:ProofingDeviceLuminance>
+				<gwg-spt:ProofingDeviceColorTemperature>4993</gwg-spt:ProofingDeviceColorTemperature>
+				<gwg-spt:ProofingDeviceWhitePointX>0.9645</gwg-spt:ProofingDeviceWhitePointX>
+				<gwg-spt:ProofingDeviceWhitePointY>0.8244</gwg-spt:ProofingDeviceWhitePointY>
+				<gwg-spt:ProofingDeviceName>Apple Cinema Display 23"</gwg-spt:ProofingDeviceName>
+				<gwg-spt:ProofingDeviceSerialNumber>CD0464874DE</gwg-spt:ProofingDeviceSerialNumber>
+			</rdf:li>
+			</rdf:Seq>
+		</gwg-spt:ProofingDevices>
+	</rdf:li>
+	<rdf:li rdf:parseType="Resource">
+	<gwg-spt:UsePDFXOutputCondition>true</gwg-spt:UsePDFXOutputCondition>
+	<gwg-spt:ProofingUserName>Thomas Merz</gwg-spt:ProofingUserName>
+	<gwg-spt:ProofingUserLogin>tm</gwg-spt:ProofingUserLogin>
+	<gwg-spt:ProofingSoftwarePlatform>Mac OS X</gwg-spt:ProofingSoftwarePlatform>
+	<gwg-spt:ProofingSoftwareVendor>Proofer Software</gwg-spt:ProofingSoftwareVendor>
+	<gwg-spt:ProofingSoftwareMake>Turbo Proofer</gwg-spt:ProofingSoftwareMake>
+	<gwg-spt:ProofingSoftwareVersion>3.0</gwg-spt:ProofingSoftwareVersion>
+	<gwg-spt:ProofingApprovalStatus>Rejected</gwg-spt:ProofingApprovalStatus>
+	<gwg-spt:ProofingApprovalDate>2014-11-01T16:27:34+01:00</gwg-spt:ProofingApprovalDate>
+	<gwg-spt:ProofingDevices>
+		<rdf:Seq>
+			<rdf:li rdf:parseType="Resource">
+				<gwg-spt:ProofingDeviceCalibrated>true</gwg-spt:ProofingDeviceCalibrated>
+				<gwg-spt:ProofingDeviceCalibrationDate>2014-10-21T16:27:34+01:00</gwg-spt:ProofingDeviceCalibrationDate>
+				<gwg-spt:ProofingDeviceLuminance>163</gwg-spt:ProofingDeviceLuminance>
+				<gwg-spt:ProofingDeviceColorTemperature>5019</gwg-spt:ProofingDeviceColorTemperature>
+				<gwg-spt:ProofingDeviceWhitePointX>0.9642</gwg-spt:ProofingDeviceWhitePointX>
+				<gwg-spt:ProofingDeviceWhitePointY>0.8254</gwg-spt:ProofingDeviceWhitePointY>
+				<gwg-spt:ProofingDeviceName>EIZO CG210</gwg-spt:ProofingDeviceName>
+				<gwg-spt:ProofingDeviceSerialNumber>FF1234567CD</gwg-spt:ProofingDeviceSerialNumber>
+			</rdf:li>
+			<rdf:li rdf:parseType="Resource">
+				<gwg-spt:ProofingDeviceCalibrated>true</gwg-spt:ProofingDeviceCalibrated>
+				<gwg-spt:ProofingDeviceCalibrationDate>2014-10-21T16:27:34+01:00</gwg-spt:ProofingDeviceCalibrationDate>
+				<gwg-spt:ProofingDeviceLuminance>161</gwg-spt:ProofingDeviceLuminance>
+				<gwg-spt:ProofingDeviceColorTemperature>5012</gwg-spt:ProofingDeviceColorTemperature>
+				<gwg-spt:ProofingDeviceWhitePointX>0.9644</gwg-spt:ProofingDeviceWhitePointX>
+				<gwg-spt:ProofingDeviceWhitePointY>0.8254</gwg-spt:ProofingDeviceWhitePointY>
+				<gwg-spt:ProofingDeviceName>EIZO CG210</gwg-spt:ProofingDeviceName>
+				<gwg-spt:ProofingDeviceSerialNumber>FF1234567CD</gwg-spt:ProofingDeviceSerialNumber>
+			</rdf:li>
+		</rdf:Seq>
+	</gwg-spt:ProofingDevices>
+	</rdf:li>
+</rdf:Seq>
+</gwg-spt:ProofingApprovals>
+</rdf:Description>
+</rdf:RDF>
+</x:xmpmeta>

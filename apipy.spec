@@ -3,8 +3,8 @@
 block_cipher = None
 
 
-a = Analysis(['api.py'],
-             pathex=['/Users/aldanaveronruizdiaz/Documents/Proyectos/kira-api'],
+a = Analysis(['apipy'],
+             pathex=['C:\\Users\\Lilo\\kira-api'],
              binaries=[],
              datas=[],
              hiddenimports=[],
@@ -21,7 +21,7 @@ exe = EXE(pyz,
           a.scripts,
           [],
           exclude_binaries=True,
-          name='api',
+          name='apipy',
           debug=False,
           bootloader_ignore_signals=False,
           strip=False,
@@ -34,4 +34,4 @@ coll = COLLECT(exe,
                strip=False,
                upx=True,
                upx_exclude=[],
-               name='api')
+               name='apipy')
