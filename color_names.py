@@ -1,3 +1,5 @@
+import os
+ENV = os.getenv("ENV")
 from PDFlib.PDFlib import *
 import sys
 import json
@@ -29,7 +31,10 @@ def make(searchpath, pdffile, outfile, colors, fsize, x, y, place, sideX, sideY)
         p = PDFlib()
 
         p.set_option("searchpath={" + searchpath + "}")
-        p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
+        if ENV == "development":
+            print("we are in development mode. do not worry about license")
+        elif ENV == "production":
+            p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
 
         # This means we must check return values of load_font() etc.
         p.set_option("errorpolicy=return")
