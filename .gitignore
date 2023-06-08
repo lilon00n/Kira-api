@@ -2,5 +2,6 @@ __pycache__/
 __pycache__
 dist/
 build/
+.DS_Store
 clients.py
 api.spec

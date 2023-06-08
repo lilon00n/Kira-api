@@ -1,9 +1,11 @@
-
+import os
+ENV = os.getenv("ENV")
 import sys
 import json
 from PDFlib.PDFlib import *
 from make_devicen import make_devicen
 from clients import findClient
+ENV = os.getenv("ENV")
 
 POINT_TO_MM_FACTOR = 72 / 25.4
 TITLES = ["Cliente:", "Vendedor:", "Esp. técnica:", "Archivo:", "Tipo de producto:","Tipo de código:", "No. Barras","Diseñador"]
@@ -560,11 +562,13 @@ def add_separation_pages(p, separations_folder, path_images, names, width, heigh
 
 def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info, separations_folder, path_images, names):
     client, title, boxes, info = load_body_information(client, outfile, boxes, info)
-
     try:
         p = PDFlib()
         # Set license key
-        p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
+        if ENV == "development":
+            print("we are in development mode. do not worry about license")
+        elif ENV == "production":
+            p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
         # This means we must check return values of load_font() etc.
         p.set_option("errorpolicy=return")
 
