@@ -394,6 +394,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     # All spot colors (CS0..CS4), ExtGState, and nested XObjects (Fm0..Fm117)
     # stay at page level — exactly like marcas.pdf — so Artpro+ can enumerate
     # separations correctly.  Artwork is positioned via a q/cm/Q block.
+    import re
     from pypdf.generic import DecodedStreamObject, NameObject, ArrayObject
 
     writer = PdfWriter()
@@ -431,6 +432,15 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
         _raw_art = b'\n'.join(ref.get_object().get_data() for ref in _contents_obj)
     else:
         _raw_art = _contents_obj.get_data()
+
+    # Strip Optional Content Group markers (/OC /MCx BDC ... EMC).
+    # The entire AI artwork is wrapped in one OC group (MC0).  Artpro+ treats
+    # marked content as optional layers; without /OCProperties in the catalog
+    # it defaults the group to OFF and deletes the content → blank page.
+    # BDC/EMC markers are purely informational and do not affect graphics state,
+    # so stripping them makes the artwork unconditionally visible.
+    _raw_art = re.sub(rb'/OC\s+/\w+\s+BDC\s*', b'', _raw_art)
+    _raw_art = re.sub(rb'\bEMC\b\s*', b'', _raw_art)
 
     # Wrap artwork in q/cm/Q so it renders at (offset_x, offset_y) on the ET sheet.
     # Resources (CS0..CS4, Fm0..Fm117, etc.) stay at page level — Artpro+ requires this.
