@@ -16,6 +16,7 @@ import json
 import os
 
 from pypdf import PdfReader, PdfWriter, Transformation
+from pypdf.generic import RectangleObject
 from reportlab.lib.colors import black, white, CMYKColor, CMYKColorSep
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen.canvas import Canvas
@@ -54,6 +55,31 @@ KEYS = [
 # ---------------------------------------------------------------------------
 TEXT_HEIGHT = FONT_SIZE * 1.35    # approximate cap+descender height in points
 
+# Maximum width (pt) reserved for a color name in the label band.
+# If any name is wider, it gets abbreviated automatically.
+MAX_COLOR_NAME_WIDTH = 72   # ~25.4 mm — comfortable for an A4 label
+
+
+def _abbreviate_pantone(name: str) -> str:
+    """Shorten Pantone names for compact display in tight layouts.
+
+    'PANTONE 261 C'  →  'P261 C'
+    'Pantone 192 C'  →  'P192 C'
+    'Black'          →  'Black'   (unchanged)
+    """
+    import re
+    m = re.match(r'(?i)pantone\s+(.+)', name.strip())
+    if m:
+        return 'P' + m.group(1)
+    return name
+
+
+def _display_name(name: str) -> str:
+    """Return display name for a colour — abbreviated if it would be too wide."""
+    if pdfmetrics.stringWidth(name, FONT_NAME, FONT_SIZE) > MAX_COLOR_NAME_WIDTH:
+        return _abbreviate_pantone(name)
+    return name
+
 
 def _tw(text, fsize=FONT_SIZE):
     """StringWidth in points using Helvetica."""
@@ -84,7 +110,7 @@ def _get_label_height(colors, info, nala_h, logo_h):
 
 def _get_label_width(colors, info, logo_w):
     mat_mach = info.get('materialMachines', [])
-    max_col  = max((_tw(c['name']) for c in colors), default=0)
+    max_col  = max((_tw(_display_name(c['name'])) for c in colors), default=0)
     max_pct  = _tw('100.00%  ')
     max_inf  = max((_tw(info.get(k, '')) for k in KEYS), default=0)
     max_mach = max(
@@ -195,14 +221,14 @@ def _draw_cotas(c, label_height, boxes, add_info):
 
 def _draw_colors_section(c, x0, y0, colors, spot_colors, max_logo):
     """Draw colour swatches + names + ink coverage column. Returns new x."""
-    max_col_w = max((_tw(col['name']) for col in colors), default=0)
+    max_col_w = max((_tw(_display_name(col['name'])) for col in colors), default=0)
     x = x0 + max_col_w
     y = y0
     max_pct = _tw('100.00%  ')
 
     for i, color in enumerate(colors):
         spot = spot_colors[color['name']]
-        name = color['name']
+        name = _display_name(color['name'])
         ink_cov = str(color.get('inkCov', '')) + '%'
 
         # Colour name (right-aligned to x)
@@ -350,8 +376,9 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     # ---- Layout calculations ----
     desp_x, desp_y = _get_bleed_trim_gap(boxes)
     trim_w, trim_h = _get_trim_size(boxes)
+    max_logo_w = max(nala_w, logo_w)          # Nala logo is usually wider than client logo
     label_h = _get_label_height(colorsJson, info, nala_h, logo_h)
-    label_w = _get_label_width(colorsJson, info, logo_w)
+    label_w = _get_label_width(colorsJson, info, max_logo_w)
     total_w  = max(label_w, trim_w)
     add_info = (label_w - trim_w) / 2 if label_w > trim_w else 0
 
@@ -411,9 +438,9 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     _draw_cotas(c, label_h, boxes, add_info)
 
     # ---- Colour section ----
-    x_gen = MEDIA_EXCESS + CROP_EXCESS + logo_w + 10
+    x_gen = MEDIA_EXCESS + CROP_EXCESS + max_logo_w + 10
     y_gen = MEDIA_EXCESS + label_h - 10
-    x_gen = _draw_colors_section(c, x_gen, y_gen, colorsJson, spot_colors, logo_w)
+    x_gen = _draw_colors_section(c, x_gen, y_gen, colorsJson, spot_colors, max_logo_w)
 
     # ---- Info section ----
     x_gen = _draw_info_section(c, x_gen, y_gen, info)
@@ -448,6 +475,10 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     # page resources — the Form XObjects inside are self-contained and still
     # render correctly. Only the job's inks should appear in separations.
     _strip_foreign_colorspaces(main_page, [c['name'] for c in colorsJson])
+
+    # Set TrimBox = full sheet so Artpro and similar prepress tools display
+    # the entire ET (label band + artwork + marks) rather than a blank page.
+    main_page.trimbox = RectangleObject((0.0, 0.0, float(media_w), float(media_h)))
 
     # ---- Separation pages ----
     for index, image_name in enumerate(path_images):

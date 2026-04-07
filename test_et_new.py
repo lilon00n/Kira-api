@@ -139,6 +139,28 @@ def process_job(job):
     coverage = calculate_coverage(source, [c['name'] for c in colors])
     for c in colors:
         c['inkCov'] = coverage.get(c['name'], '0')
+
+    # ---- Detectar colores de proceso CMYK ----------------------
+    # GS siempre genera canales C/M/Y/K; incluirlos si tienen tinta real.
+    _CMYK_THRESHOLD = 0.05   # % mínimo para considerar uso real de proceso
+    _CMYK_LAB = {
+        'Cyan':    {'l': 57.0,  'a': -36.7, 'ba': -44.7},
+        'Magenta': {'l': 48.0,  'a':  74.2,  'ba':  -4.7},
+        'Yellow':  {'l': 88.4,  'a':  -8.5,  'ba':  88.4},
+        'Black':   {'l':  0.0,  'a':   0.0,  'ba':   0.0},
+    }
+    existing_names = {c['name'] for c in colors}
+    for ink_name in ('Cyan', 'Magenta', 'Yellow', 'Black'):
+        if ink_name in existing_names:
+            continue  # ya existe como spot con ese nombre
+        cov_val = float(coverage.get(ink_name, '0'))
+        if cov_val >= _CMYK_THRESHOLD:
+            colors.append({
+                'name':   ink_name,
+                'inkCov': f'{cov_val:.2f}',
+                **_CMYK_LAB[ink_name],
+            })
+
     print(f'Colores: {", ".join(c["name"] + " " + c["inkCov"] + "%" for c in colors)}')
 
     # ---- PARTE 1: one_up ---------------------------------------
@@ -156,7 +178,7 @@ def process_job(job):
         [],
         [],
     )
-    print(f'   ✓  {os.path.basename(job["out_et"])}  ({os.path.getsize(job["out_et"])//1024} KB)')
+    print(f'   OK  {os.path.basename(job["out_et"])}  ({os.path.getsize(job["out_et"])//1024} KB)')
 
     # ---- PARTE 2: marcas ---------------------------------------
     print(f'[MRK] Aplicando marcas...')
@@ -205,7 +227,7 @@ def process_job(job):
             x_bar, y_bar, 'L', 'f', 'f')
     shutil.move(tmp, out_mrk)
 
-    print(f'   ✓  {os.path.basename(out_mrk)}  ({os.path.getsize(out_mrk)//1024} KB)')
+    print(f'   OK  {os.path.basename(out_mrk)}  ({os.path.getsize(out_mrk)//1024} KB)')
 
 
 # ------------------------------------------------------------------

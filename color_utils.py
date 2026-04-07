@@ -10,6 +10,15 @@ When the PDF is sent to a RIP, each spot color appears on its own plate.
 
 from reportlab.lib.colors import CMYKColor, CMYKColorSep
 
+# Fixed CMYK values for process inks when a file uses DeviceCMYK objects.
+# These bypass the Lab→CMYK conversion since the inks are already process colors.
+_PROCESS_CMYK = {
+    'Cyan':    (1.0, 0.0, 0.0, 0.0),
+    'Magenta': (0.0, 1.0, 0.0, 0.0),
+    'Yellow':  (0.0, 0.0, 1.0, 0.0),
+    'Black':   (0.0, 0.0, 0.0, 1.0),
+}
+
 
 def _lab_to_cmyk(L, a, b):
     """
@@ -68,14 +77,17 @@ def make_spot_colors(colors):
     result = {}
     for color in colors:
         name = color['name']
-        try:
-            c, m, y, k = _lab_to_cmyk(
-                float(color.get('l', 0)),
-                float(color.get('a', 0)),
-                float(color.get('ba', 0)),
-            )
-        except (ValueError, TypeError):
-            c, m, y, k = 0.0, 0.0, 0.0, 1.0
+        if name in _PROCESS_CMYK:
+            c, m, y, k = _PROCESS_CMYK[name]
+        else:
+            try:
+                c, m, y, k = _lab_to_cmyk(
+                    float(color.get('l', 0)),
+                    float(color.get('a', 0)),
+                    float(color.get('ba', 0)),
+                )
+            except (ValueError, TypeError):
+                c, m, y, k = 0.0, 0.0, 0.0, 1.0
         result[name] = CMYKColorSep(c, m, y, k, spotName=name)
     return result
 

@@ -84,6 +84,7 @@ def calculate_coverage(pdf_path: str, color_names: list, resolution: int = 72) -
             f"-r{resolution}",
             "-dFirstPage=1",
             "-dLastPage=1",
+            "-dUseTrimBox",   # measure only within the TrimBox, not bleed
             f"-sOutputFile={out_pattern}",
             os.path.abspath(pdf_path),
         ]
@@ -145,6 +146,30 @@ def calculate_coverage(pdf_path: str, color_names: list, resolution: int = 72) -
                 print(f"  [ink_coverage] Canal '{name}' no encontrado en separaciones")
                 print(f"  Archivos generados: {[os.path.basename(t) for t in tif_files]}")
                 coverage[name] = "0"
+
+        # ---- Detect process CMYK channels (GS always generates them) ----
+        # GS names them: Cyan, Magenta, Yellow, Black (or Black(K))
+        _PROCESS_ALIASES = {
+            'Cyan':    ['cyan'],
+            'Magenta': ['magenta'],
+            'Yellow':  ['yellow'],
+            'Black':   ['black', 'black(k)'],
+        }
+        for ink_name, aliases in _PROCESS_ALIASES.items():
+            if ink_name in coverage:
+                continue   # already measured (e.g., file has a /Separation called 'Cyan')
+            for alias in aliases:
+                tif_path = tif_map.get(alias)
+                if tif_path and os.path.exists(tif_path):
+                    try:
+                        from PIL import Image
+                        im = Image.open(tif_path).convert("L")
+                        arr = np.array(im, dtype=np.float32)
+                        ink_frac = 1.0 - float(np.mean(arr / 255.0))
+                        coverage[ink_name] = f"{ink_frac * 100:.2f}"
+                    except Exception:
+                        coverage[ink_name] = "0"
+                    break
 
         return coverage
 
