@@ -395,29 +395,45 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     # The container page content stream contains only "/ArtFm Do" — no cm operator.
     # This matches how PDFlib's fit_pdi_page() works and avoids q/cm/Q wrappers
     # that Artpro+ cannot process.
+    import re
     from pypdf.generic import (
-        DecodedStreamObject, NameObject, ArrayObject, DictionaryObject,
-        FloatObject, NumberObject,
+        DecodedStreamObject, NameObject, ArrayObject,
+        DictionaryObject, FloatObject, NumberObject,
     )
 
     writer = PdfWriter()
     writer.append(src_reader, pages=[0])
     main_page = writer.pages[0]
 
+    # Copy OC properties from source to writer catalog so Artpro+ knows
+    # which Optional Content Groups (layers) exist and are visible by default.
+    _src_cat = src_reader.trailer['/Root'].get_object()
+    if '/OCProperties' in _src_cat:
+        writer._root_object[NameObject('/OCProperties')] = _src_cat['/OCProperties'].clone(writer)
+
     # Capture cloned source resources and Group (already in writer's object space)
     _src_resources = main_page[NameObject('/Resources')].get_object()
     _src_group_entry = main_page.get(NameObject('/Group'))
     _src_group = _src_group_entry.get_object() if _src_group_entry is not None else None
 
-    # Extract raw artwork bytes from the cloned content stream(s)
+    # Extract raw artwork bytes from the cloned content stream(s).
+    # Use b'\n' join to avoid token-boundary issues when concatenating streams.
     _contents_obj = main_page[NameObject('/Contents')].get_object()
     if isinstance(_contents_obj, ArrayObject):
-        _raw_art = b''.join(ref.get_object().get_data() for ref in _contents_obj)
+        _raw_art = b'\n'.join(ref.get_object().get_data() for ref in _contents_obj)
     else:
         _raw_art = _contents_obj.get_data()
 
+    # Strip Optional Content Group (layer) markers from the artwork stream.
+    # Inside a Form XObject, Artpro+ may default OC groups to invisible when
+    # /OCProperties is not in the catalog; stripping makes content unconditional.
+    # BDC/EMC are purely informational markers — they do not affect graphics state.
+    _raw_art = re.sub(rb'/OC\s+/\w+\s+BDC\s*', b'', _raw_art)
+    _raw_art = re.sub(rb'\bEMC\b\s*', b'', _raw_art)
+
     # Build the /Form XObject.  The /Matrix encodes the (offset_x, offset_y)
     # translation so the page content stream needs no cm operator at all.
+    # Use FlateDecode compression — Artpro+ requires properly encoded streams.
     _xobj = DecodedStreamObject()
     _xobj[NameObject('/Type')] = NameObject('/XObject')
     _xobj[NameObject('/Subtype')] = NameObject('/Form')
@@ -433,6 +449,8 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     if _src_group is not None:
         _xobj[NameObject('/Group')] = _src_group
     _xobj.set_data(_raw_art)
+    # Compress the stream — FlateDecode is required for Artpro+ compatibility
+    _xobj = _xobj.flate_encode()
     _xobj_ref = writer._add_object(_xobj)
 
     # Resize main_page to the full ET sheet
