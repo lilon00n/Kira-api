@@ -35,8 +35,8 @@ def make(searchpath, pdffile, outfile, colors, intensities, size, x, y, place, s
         for color in colors:
             base_spot = spot_colors[color['name']]
             for tint in intensities:
-                from reportlab.lib.colors import CMYKColor
-                tinted = CMYKColor(
+                from reportlab.lib.colors import CMYKColorSep
+                tinted = CMYKColorSep(
                     base_spot.cyan * tint,
                     base_spot.magenta * tint,
                     base_spot.yellow * tint,

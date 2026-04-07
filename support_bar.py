@@ -7,7 +7,7 @@ Migrated from PDFlib to reportlab + pypdf.
 """
 
 import os
-from reportlab.lib.colors import CMYKColor
+from reportlab.lib.colors import CMYKColorSep
 from color_utils import make_spot_colors
 from pdf_utils import get_source_info, create_overlay_canvas, finalize_and_merge_multipage
 
@@ -31,7 +31,7 @@ def make(searchpath, pdffile, outfile, colors, x, y, width, height, percent):
         # here we composite them.  For a single-color use case this is exact.
         for color_data in colors:
             base = spot_colors[color_data['name']]
-            tinted = CMYKColor(
+            tinted = CMYKColorSep(
                 base.cyan * tint,
                 base.magenta * tint,
                 base.yellow * tint,

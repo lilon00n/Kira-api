@@ -16,7 +16,7 @@ import json
 import os
 
 from pypdf import PdfReader, PdfWriter, Transformation
-from reportlab.lib.colors import black, white, CMYKColor
+from reportlab.lib.colors import black, white, CMYKColor, CMYKColorSep
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen.canvas import Canvas
 
@@ -217,7 +217,7 @@ def _draw_colors_section(c, x0, y0, colors, spot_colors, max_logo):
 
         # 4 swatch boxes: 100%, 70%, 50%, 20%
         for j, tint in enumerate([1.0, 0.7, 0.5, 0.2]):
-            tinted = CMYKColor(
+            tinted = CMYKColorSep(
                 spot.cyan * tint, spot.magenta * tint,
                 spot.yellow * tint, spot.black * tint,
                 spotName=spot.spotName, density=tint,
@@ -444,6 +444,10 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
             tx=nala_x, ty=nala_y,
         ),
     )
+    # The Nala logo PDF carries its own spot colors; strip them from the main
+    # page resources — the Form XObjects inside are self-contained and still
+    # render correctly. Only the job's inks should appear in separations.
+    _strip_foreign_colorspaces(main_page, [c['name'] for c in colorsJson])
 
     # ---- Separation pages ----
     for index, image_name in enumerate(path_images):
@@ -472,6 +476,39 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _strip_foreign_colorspaces(page, job_spot_names):
+    """
+    Remove /Separation colorspace entries from the page resources that do NOT
+    belong to the job's ink list. Entries added by merged template elements
+    (e.g. the Nala logo PDF) are stripped so that separation-preview tools
+    show only the actual job inks.
+
+    Safe because pypdf's merge_transformed_page wraps foreign pages in Form
+    XObjects that carry their own self-contained /Resources, so the logo still
+    renders correctly after the parent-page entries are removed.
+    """
+    allowed = set(job_spot_names) | {'All'}
+    try:
+        res = page['/Resources']
+        if '/ColorSpace' not in res:
+            return
+        cs_dict = res['/ColorSpace']
+        to_remove = []
+        for key in list(cs_dict.keys()):
+            try:
+                cs_arr = list(cs_dict[key])
+                if len(cs_arr) >= 2 and str(cs_arr[0]) == '/Separation':
+                    spot_name = str(cs_arr[1]).lstrip('/')
+                    if spot_name not in allowed:
+                        to_remove.append(key)
+            except Exception:
+                pass
+        for key in to_remove:
+            del cs_dict[key]
+    except Exception:
+        pass
+
 
 def _load_body_info(client, outfile, boxes, info):
     client_obj = findClient(client)

@@ -8,7 +8,7 @@ a spotName so that ReportLab outputs proper PDF Separation color spaces.
 When the PDF is sent to a RIP, each spot color appears on its own plate.
 """
 
-from reportlab.lib.colors import CMYKColor
+from reportlab.lib.colors import CMYKColor, CMYKColorSep
 
 
 def _lab_to_cmyk(L, a, b):
@@ -76,16 +76,16 @@ def make_spot_colors(colors):
             )
         except (ValueError, TypeError):
             c, m, y, k = 0.0, 0.0, 0.0, 1.0
-        result[name] = CMYKColor(c, m, y, k, spotName=name)
+        result[name] = CMYKColorSep(c, m, y, k, spotName=name)
     return result
 
 
 def get_registration_color():
     """
-    Returns a CMYK 'registration' color (all channels at 100%).
-    Used for crop marks and registration marks — prints on every plate.
+    Returns a registration color that appears on EVERY separation plate.
+    Uses PDF /Separation /All — the standard prepress registration ink.
     """
-    return CMYKColor(1.0, 1.0, 1.0, 1.0)
+    return CMYKColorSep(1.0, 1.0, 1.0, 1.0, spotName='All')
 
 
 def get_color_at_tint(spot_color, tint):
@@ -93,7 +93,7 @@ def get_color_at_tint(spot_color, tint):
     Return a version of the spot color at a different tint level.
     tint: float in [0.0, 1.0]
     """
-    return CMYKColor(
+    return CMYKColorSep(
         spot_color.cyan * tint,
         spot_color.magenta * tint,
         spot_color.yellow * tint,
