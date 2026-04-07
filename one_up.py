@@ -390,39 +390,70 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     offset_y = MEDIA_EXCESS + label_h + CROP_EXCESS + desp_y
 
     # ---- Build the output PDF ----
-    # Strategy: positive MediaBox (0,0,media_w,media_h) + artwork wrapped in
-    # a save-restore q/cm/Q block so it appears at (offset_x, offset_y) in ET
-    # space. The label canvas is drawn at standard ET coordinates and merged
-    # inline via merge_page() — no Form XObjects, no negative coordinates.
-    # This is the only approach Artpro+ accepts: inline content + positive page.
+    # Strategy: wrap the source AI page in a /Form XObject and place it on the
+    # ET sheet via a cm + /ArtFm Do invocation.  This mirrors what PDFlib's
+    # fit_pdi_page() produces and is known to work in Artpro+.
+    # All artwork resources (spot colors, nested XObjects, ExtGState) live inside
+    # the Form XObject; the container page carries only the label/Nala resources.
+    from pypdf.generic import (
+        DecodedStreamObject, NameObject, ArrayObject, DictionaryObject, FloatObject,
+    )
 
     writer = PdfWriter()
     writer.append(src_reader, pages=[0])
     main_page = writer.pages[0]
 
-    # Positive ET-sheet MediaBox — Artpro requires positive origin
+    # Capture cloned source resources and Group (already in writer's object space)
+    _src_resources = main_page[NameObject('/Resources')].get_object()
+    _src_group_entry = main_page.get(NameObject('/Group'))
+    _src_group = _src_group_entry.get_object() if _src_group_entry is not None else None
+
+    # Extract raw artwork bytes from the cloned content stream(s)
+    _contents_obj = main_page[NameObject('/Contents')].get_object()
+    if isinstance(_contents_obj, ArrayObject):
+        _raw_art = b''.join(ref.get_object().get_data() for ref in _contents_obj)
+    else:
+        _raw_art = _contents_obj.get_data()
+
+    # Build the /Form XObject that wraps the source artwork
+    _xobj = DecodedStreamObject()
+    _xobj[NameObject('/Type')] = NameObject('/XObject')
+    _xobj[NameObject('/Subtype')] = NameObject('/Form')
+    _xobj[NameObject('/BBox')] = ArrayObject([
+        FloatObject(0), FloatObject(0), FloatObject(src_w), FloatObject(src_h),
+    ])
+    _xobj[NameObject('/Resources')] = _src_resources
+    if _src_group is not None:
+        _xobj[NameObject('/Group')] = _src_group
+    _xobj.set_data(_raw_art)
+    _xobj_ref = writer._add_object(_xobj)
+
+    # Resize main_page to the full ET sheet
     main_page.mediabox = RectangleObject((0.0, 0.0, float(media_w), float(media_h)))
     for _bk in ('/BleedBox', '/CropBox', '/ArtBox', '/TrimBox'):
         if _bk in main_page:
             del main_page[_bk]
 
-    # Wrap the artwork content stream(s) in a save-restore + cm block so the
-    # artwork appears at (offset_x, offset_y) in the positive ET-sheet space.
-    # Using explicit q/cm/Q (NOT add_transformation) so only artwork is affected.
-    from pypdf.generic import DecodedStreamObject, NameObject, ArrayObject
-    _contents = main_page['/Contents']
-    _contents_obj = _contents.get_object()
-    if isinstance(_contents_obj, ArrayObject):
-        _raw = b''.join(ref.get_object().get_data() for ref in _contents_obj)
-    else:
-        _raw = _contents_obj.get_data()
+    # Replace main_page resources with a minimal dict referencing only /ArtFm.
+    # merge_page / merge_transformed_page calls below will extend this dict.
+    _page_xobj_dict = DictionaryObject()
+    _page_xobj_dict[NameObject('/ArtFm')] = _xobj_ref
+    _page_resources = DictionaryObject()
+    _page_resources[NameObject('/XObject')] = _page_xobj_dict
+    main_page[NameObject('/Resources')] = _page_resources
 
-    _header = f'q\n1 0 0 1 {offset_x:.6f} {offset_y:.6f} cm\n'.encode()
-    _wrapped = _header + _raw + b'\nQ\n'
-    _new_stream = DecodedStreamObject()
-    _new_stream.set_data(_wrapped)
-    _new_ref = writer._add_object(_new_stream)
-    main_page[NameObject('/Contents')] = _new_ref
+    # Propagate page-level Group for transparency context
+    if _src_group is not None:
+        main_page[NameObject('/Group')] = _src_group
+
+    # Content stream: place the artwork Form XObject at (offset_x, offset_y)
+    _place_bytes = (
+        f'q\n1 0 0 1 {offset_x:.6f} {offset_y:.6f} cm\n/ArtFm Do\nQ\n'
+    ).encode()
+    _place_stream = DecodedStreamObject()
+    _place_stream.set_data(_place_bytes)
+    _place_ref = writer._add_object(_place_stream)
+    main_page[NameObject('/Contents')] = _place_ref
 
     canvas_w = float(media_w)
     canvas_h = float(media_h)
