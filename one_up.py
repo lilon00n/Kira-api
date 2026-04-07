@@ -535,25 +535,34 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
         Transformation().translate(tx=float(mb_left), ty=float(mb_bottom)),
     )
 
-    # Merge the Nala logo PDF at the correct canvas position
+    # Merge the Nala logo PDF.
+    # nala_x/nala_y are OLD ET-sheet coords (Y from ET sheet bottom).
+    # In the new page coordinate space (artwork at Y=0, label at negative Y),
+    # the Nala position must be shifted by (mb_left, mb_bottom).
     nala_reader2  = PdfReader(nala_pdf_path)
     nala_src_page = nala_reader2.pages[0]
     scale = 0.6
     main_page.merge_transformed_page(
         nala_src_page,
         Transformation().scale(scale, scale).translate(
-            tx=nala_x, ty=nala_y,
+            tx=float(mb_left) + nala_x,
+            ty=float(mb_bottom) + nala_y,
         ),
     )
     # Strip Nala logo spot colors from parent page resources
     _strip_foreign_colorspaces(main_page, [col['name'] for col in colorsJson])
 
-    # TrimBox = artwork area on the ET sheet (in MediaBox coords; artwork at Y=0)
+    # TrimBox = artwork area on the ET sheet (artwork at Y=0 in page coords)
     art_mb_x0 = float(art_x0)
     art_mb_y0 = 0.0
     art_mb_x1 = float(art_x0 + src_w)
     art_mb_y1 = float(src_h)
     main_page.trimbox = RectangleObject((art_mb_x0, art_mb_y0, art_mb_x1, art_mb_y1))
+
+    # CropBox = full ET sheet so Artpro uses the entire spread (label + artwork + marks)
+    from pypdf.generic import NameObject
+    main_page[NameObject('/CropBox')] = RectangleObject((float(mb_left), float(mb_bottom),
+                                                          float(mb_right), float(mb_top)))
 
     # ---- Separation pages ----
     for index, image_name in enumerate(path_images):
