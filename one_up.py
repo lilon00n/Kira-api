@@ -391,14 +391,26 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
 
     # ---- Build the output PDF ----
     writer = PdfWriter()
-    src_page = src_reader.pages[0]
 
-    # Create a blank page of the target size and merge the source at its offset
-    main_page = writer.add_blank_page(media_w, media_h)
-    main_page.merge_transformed_page(
-        src_page,
-        Transformation().translate(tx=offset_x, ty=offset_y),
+    # Append the source page so pypdf properly resolves all indirect object
+    # references, then translate all artwork to its position on the ET sheet
+    # and expand the page to the full ET dimensions.
+    #
+    # CRITICAL for Artpro compatibility: add_transformation() injects a
+    # coordinate-system transform directly into the page content stream.
+    # The artwork stays as native page content — NOT wrapped in a Form XObject
+    # as merge_transformed_page() would do. Artpro+ (and most prepress RIPs)
+    # will not display content that lives inside a Form XObject.
+    writer.append(src_reader, pages=[0])
+    main_page = writer.pages[0]
+    main_page.add_transformation(
+        Transformation().translate(tx=offset_x, ty=offset_y)
     )
+    main_page.mediabox = RectangleObject((0.0, 0.0, float(media_w), float(media_h)))
+    # Remove source-page box overrides — ET sheet boxes take precedence
+    for _bk in ('/BleedBox', '/CropBox', '/ArtBox'):
+        if _bk in main_page:
+            del main_page[_bk]
 
     # ---- Draw the label overlay with ReportLab ----
     label_buf = io.BytesIO()
