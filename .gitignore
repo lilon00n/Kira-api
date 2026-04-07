@@ -1,7 +1,31 @@
+﻿# Python
 __pycache__/
-__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
 dist/
 build/
+
+# Virtual environments
+.venv/
+venv-new/
+venv/
+
+# macOS
 .DS_Store
-clients.py
-api.spec
+
+# Environment variables
+.env
+
+# Runtime input/output (uploaded files)
+input/
+
+# Old PDFlib binaries (no longer needed)
+pdflib_py.pyd
+pdflib_py.so
+PDFlib/
+
+# PyInstaller specs
+*.spec

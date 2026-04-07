@@ -1,84 +1,51 @@
+﻿# -*- coding: utf-8 -*-
+"""
+support_bar.py
+Draws a single filled rectangle at (x, y, width, height) at a given tint
+(percent) of the spot colors.
+Migrated from PDFlib to reportlab + pypdf.
+"""
+
 import os
-ENV = os.getenv("ENV")
-import sys
-from PDFlib.PDFlib import *
-from make_devicen import make_devicen
+from reportlab.lib.colors import CMYKColor
+from color_utils import make_spot_colors
+from pdf_utils import get_source_info, create_overlay_canvas, finalize_and_merge_multipage
 
 
 def make(searchpath, pdffile, outfile, colors, x, y, width, height, percent):
-    paths = outfile.split("\\")
-    if len(paths) == 1:
-        paths = outfile.split("/")
-    title = paths[len(paths)-1]
-    percent = str(percent)
-    p = None
+    x = float(x)
+    y = float(y)
+    width = float(width)
+    height = float(height)
+    tint = float(percent)
 
-    try:
-        p = PDFlib()
-        p.set_option("searchpath={" + searchpath + "}")
+    page_width, page_height, num_pages = get_source_info(pdffile)
+    spot_colors = make_spot_colors(colors)
 
-        if ENV == "development":
-            print("we are in development mode. do not worry about license")
-        elif ENV == "production":
-            p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
-        # This means we must check return values of load_font() etc.
-        p.set_option("errorpolicy=return")
-        # Open the input PDF */
-        indoc = p.open_pdi_document(pdffile, "")
-        if indoc == -1:
-            print("Error: " + p.get_errmsg())
-            next
-        pagewidth = p.pcos_get_number(indoc, "pages[0]/width")
-        pageheight = p.pcos_get_number(indoc, "pages[0]/height")
-        endpage = p.pcos_get_number(indoc, "length:pages")
-        pageopen = False
-        if p.begin_document(outfile, "") == -1:
-            raise "Error: " + p.get_errmsg()
+    pages_overlays = []
+    for _ in range(num_pages):
+        c, buf = create_overlay_canvas(page_width, page_height)
 
-        p.set_info("Creator", "Nala by Verdant Solution")
-        p.set_info("Title", title)
+        # Draw one rectangle per spot color blended at given tint.
+        # The original draws all inks simultaneously (a single DeviceN fill);
+        # here we composite them.  For a single-color use case this is exact.
+        for color_data in colors:
+            base = spot_colors[color_data['name']]
+            tinted = CMYKColor(
+                base.cyan * tint,
+                base.magenta * tint,
+                base.yellow * tint,
+                base.black * tint,
+                spotName=base.spotName,
+                density=tint,
+            )
+            c.setFillColor(tinted)
 
-        devicen = make_devicen(p, colors)
-        # Loop over all pages of the input document
-        for pageno in range(1, int(endpage)+1, 1):
-            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
+        # Original: rect at (x, pageheight - y, width, height)
+        draw_y = page_height - y
+        c.rect(x, draw_y, width, height, stroke=0, fill=1)
 
-            if page == -1:
-                print("Error: " + p.get_errmsg())
-                next
+        c.showPage()
+        pages_overlays.append((c, buf))
 
-            # Start a new page
-            if not pageopen:
-                p.begin_page_ext(float(pagewidth), float(pageheight), "")
-                pageopen = True
-
-            p.fit_pdi_page(page, 0, pageheight, "cloneboxes")
-            ones = ""
-            for a in range(len(colors)):
-                ones = ones + percent + " "
-
-            p.set_graphics_option("fillcolor={devicen " + str(devicen)+" " + ones +
-                                  "} strokecolor={devicen " + str(devicen)+" " + ones + "}")
-            p.moveto(0, 0)
-            p.rect(float(x), float(pageheight) -
-                   float(y), float(width), float(height))
-            p.fill()
-
-            p.close_pdi_page(page)
-
-            p.end_page_ext("")
-
-        p.close_pdi_document(indoc)
-
-        p.end_document("")
-
-    except PDFlibException as ex:
-        print("PDFlib exception occurred:")
-        print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))
-
-    except Exception as ex:
-        print(ex)
-
-    finally:
-        if p:
-            p.delete()
+    finalize_and_merge_multipage(pdffile, pages_overlays, outfile)

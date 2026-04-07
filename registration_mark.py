@@ -1,138 +1,67 @@
+﻿# -*- coding: utf-8 -*-
+"""
+registration_mark.py
+Draws a registration mark (cross + concentric circles) at a given position
+on every page of a PDF.
+Migrated from PDFlib to reportlab + pypdf.
+"""
+
 import os
-ENV = os.getenv("ENV")
-import sys
-import json
-from PDFlib.PDFlib import *
-from make_devicen import make_devicen
+import math
+from reportlab.lib.colors import white as rl_white
+from color_utils import make_spot_colors, get_all_inks_color
+from pdf_utils import get_source_info, create_overlay_canvas, finalize_and_merge_multipage
+
+
+def _draw_reg_mark(c, cx, cy, radius, mark_color, lw):
+    """
+    Render a standard prepress registration mark centred at (cx, cy).
+    Structure:
+      - Cross lines spanning the full diameter
+      - Filled inner circle (radius/3)
+      - White lines on inner radius
+      - Outer stroke circle (2*radius/3)
+    """
+    c.setLineWidth(lw)
+
+    # Cross lines
+    c.setStrokeColor(mark_color)
+    c.line(cx - radius, cy, cx + radius, cy)
+    c.line(cx, cy - radius, cx, cy + radius)
+
+    # Filled inner circle
+    c.setFillColor(mark_color)
+    c.circle(cx, cy, radius / 3, stroke=0, fill=1)
+
+    # White inner cross (hides centre of cross lines to create the classic look)
+    c.setStrokeColor(rl_white)
+    c.setLineWidth(lw)
+    c.line(cx - radius / 3, cy, cx + radius / 3, cy)
+    c.line(cx, cy - radius / 3, cx, cy + radius / 3)
+
+    # Outer ring
+    c.setStrokeColor(mark_color)
+    c.circle(cx, cy, 2 * radius / 3, stroke=1, fill=0)
 
 
 def make(searchpath, pdffile, outfile, colors, x, y, crop_size, weight):
-    paths = outfile.split("\\")
-    if len(paths) == 1:
-        paths = outfile.split("/")
-    title = paths[len(paths)-1]
-    #searchpath = sys.argv[1]
-    #pdffile = sys.argv[2]
-    #outfile = sys.argv[3]
     x = float(x)
     y = float(y)
-    weight = str(weight)
     crop_size = float(crop_size)
+    lw = float(weight)
 
-    p = None
+    page_width, page_height, num_pages = get_source_info(pdffile)
+    spot_colors = make_spot_colors(colors)
+    mark_color = get_all_inks_color(spot_colors)
 
-    def create_registration_mark(p, radius, devicen, ones):
-        registration_mark = -1
-        # Long black lines
-        for step in range(0, 2, 1):
-            registration_mark = p.add_path_point(registration_mark,
-                                                 radius, step * 90,
-                                                 "move", "stroke nofill strokecolor={devicen " + str(devicen)+" " + ones + "} polar")
-            registration_mark = p.add_path_point(registration_mark,
-                                                 radius, (step + 2) * 90, "line", "polar")
+    # y is measured from the top in original PDFlib code
+    cy = page_height - y
 
-        # Inner circle
-        registration_mark = p.add_path_point(registration_mark,
-                                             -radius / 3, 0, "move",
-                                             "fill nostroke strokecolor={devicen " + str(devicen)+" " + ones + "} fillcolor={devicen " + str(devicen)+" " + ones + "}")
-        registration_mark = p.add_path_point(registration_mark,
-                                             radius / 3, 0, "control", "")
-        registration_mark = p.add_path_point(registration_mark,
-                                             -radius / 3, 0, "circular", "")
+    pages_overlays = []
+    for _ in range(num_pages):
+        c, buf = create_overlay_canvas(page_width, page_height)
+        _draw_reg_mark(c, x, cy, crop_size, mark_color, lw)
+        c.showPage()
+        pages_overlays.append((c, buf))
 
-        # Short white lines
-        for step in range(0, 2, 1):
-            registration_mark = p.add_path_point(registration_mark, radius / 3, step * 90,
-                                                 "move", "stroke nofill strokecolor={gray 1} polar")
-            registration_mark = p.add_path_point(registration_mark,
-                                                 radius / 3, (step + 2) * 90, "line", "polar")
-
-        # Outer circle
-        registration_mark = p.add_path_point(registration_mark, -2
-                                             * radius / 3, 0, "move",
-                                             "stroke nofill strokecolor={devicen " + str(devicen)+" " + ones + "}")
-        registration_mark = p.add_path_point(registration_mark,
-                                             2 * radius / 3, 0, "control", "")
-        registration_mark = p.add_path_point(registration_mark, -2
-                                             * radius / 3, 0, "circular", "")
-
-        return registration_mark
-
-    def draw_corner(p, angle, x, y, crop_mark):
-        p.save()
-        p.translate(x, y)
-        p.rotate(angle)
-        p.draw_path(crop_mark, 0, 0, "fill stroke")
-        p.restore()
-
-    try:
-        p = PDFlib()
-
-        p.set_option("searchpath={" + searchpath + "}")
-        if ENV == "development":
-            print("we are in development mode. do not worry about license")
-        elif ENV == "production":
-            p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
-
-        # This means we must check return values of load_font() etc.
-        p.set_option("errorpolicy=return")
-
-        # Open the input PDF */
-        indoc = p.open_pdi_document(pdffile, "")
-        if indoc == -1:
-            print("Error: " + p.get_errmsg())
-            next
-        pagewidth = p.pcos_get_number(indoc, "pages[0]/width")
-        pageheight = p.pcos_get_number(indoc, "pages[0]/height")
-
-        endpage = p.pcos_get_number(indoc, "length:pages")
-        pageopen = False
-
-        if p.begin_document(outfile, "") == -1:
-            raise "Error: " + p.get_errmsg()
-
-        p.set_info("Creator", "Nala by Verdant Solution")
-        p.set_info("Title", title)
-        devicen = make_devicen(p, colors)
-        # Loop over all pages of the input document
-        for pageno in range(1, int(endpage)+1, 1):
-            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
-
-            if page == -1:
-                print("Error: " + p.get_errmsg())
-                next
-
-            # Start a new page
-            if not pageopen:
-                p.begin_page_ext(float(pagewidth), float(pageheight), "")
-                pageopen = True
-
-            y = float(pageheight)-float(y)
-            ones = ""
-            for a in range(len(colors)):
-                ones = ones + "1 "
-            p.fit_pdi_page(page, 0, pageheight, "cloneboxes")
-            p.set_graphics_option("fillcolor={devicen " + str(devicen)+" " + ones +
-                                  "} strokecolor={devicen " + str(devicen)+" " + ones + "} linewidth="+weight)
-            registration_mark = create_registration_mark(
-                p, int(crop_size), devicen, ones)
-            draw_corner(p, 0, x, y,  registration_mark)
-
-            p.close_pdi_page(page)
-
-            p.end_page_ext("")
-
-        p.close_pdi_document(indoc)
-
-        p.end_document("")
-
-    except PDFlibException as ex:
-        print("PDFlib exception occurred:")
-        print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))
-
-    except Exception as ex:
-        print(ex)
-
-    finally:
-        if p:
-            p.delete()
+    finalize_and_merge_multipage(pdffile, pages_overlays, outfile)

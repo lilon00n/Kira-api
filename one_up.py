@@ -1,683 +1,482 @@
-import os
-ENV = os.getenv("ENV")
-import sys
+﻿# -*- coding: utf-8 -*-
+"""
+one_up.py
+Creates a single "one-up proof sheet" PDF:
+  - A new page larger than the source, with space for a label band
+  - The source PDF embedded at an offset (bleed/trim registration)
+  - A label band: Nala logo, client logo, colour table, job info, machine/material, salida image
+  - Crop marks, registration marks, and dimension cotas in the margins
+  - Extra pages for each separation TIFF
+
+Migrated from PDFlib to reportlab + pypdf + Pillow.
+"""
+
+import io
 import json
-from PDFlib.PDFlib import *
-from make_devicen import make_devicen
+import os
+
+from pypdf import PdfReader, PdfWriter, Transformation
+from reportlab.lib.colors import black, white, CMYKColor
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfgen.canvas import Canvas
+
 from clients import findClient
-ENV = os.getenv("ENV")
+from color_utils import make_spot_colors, get_all_inks_color
 
-POINT_TO_MM_FACTOR = 72 / 25.4
-TITLES = ["Cliente:", "Vendedor:", "Esp. técnica:", "Archivo:", "Tipo de producto:","Tipo de código:", "No. Barras","Diseñador"]
-KEYS = ["customer", "salesman", "tsCode", "fileName","productType","barcodeType","barcodeNumber","designer"]
-CROP_SIZE = 8
-SQUARE_COLOR_SIZE = 7
-FONT_SIZE = 8
-CROP_MARK_SEPARATION = 4
-COTA_SEPARATION = 5*POINT_TO_MM_FACTOR
-CRUZ_SEPARATION = 3*POINT_TO_MM_FACTOR
-BLEED_EXCESS = 5*POINT_TO_MM_FACTOR
-CROP_EXCESS = CROP_SIZE*POINT_TO_MM_FACTOR 
-MEDIA_EXCESS = 5*POINT_TO_MM_FACTOR
-SEARCH_DATA_PATH = './data'
-def draw_corner(p, x, y, crop_mark, weight):
-    p.save()
-    p.translate(x, y)
-    p.draw_path(crop_mark, 0, 0, "fill stroke linewidth="+str(weight))
-    p.restore()
+# ---------------------------------------------------------------------------
+# Constants (mirroring original)
+# ---------------------------------------------------------------------------
+POINT_TO_MM = 72 / 25.4          # points per mm
+CROP_SIZE         = 8             # mm
+SQUARE_COLOR_SIZE = 7             # pt
+FONT_SIZE         = 8             # pt
+FONT_NAME         = 'Helvetica'
+CROP_MARK_SEP     = 4             # pt
+COTA_SEP          = 5  * POINT_TO_MM
+CRUZ_SEP          = 3  * POINT_TO_MM
+BLEED_EXCESS      = 5  * POINT_TO_MM
+CROP_EXCESS       = CROP_SIZE * POINT_TO_MM
+MEDIA_EXCESS      = 5  * POINT_TO_MM
+DATA_PATH         = os.path.join(os.path.dirname(__file__), 'data')
 
-def draw_crop_marks(p, x_margin, y_margin, size, weight, dist_height, dist_width, width, height):
-    p.set_graphics_option("linewidth="+str(weight))
+# Label column titles & matching info-dict keys
+TITLES = [
+    'Cliente:', 'Vendedor:', 'Esp. técnica:', 'Archivo:',
+    'Tipo de producto:', 'Tipo de código:', 'No. Barras', 'Diseñador',
+]
+KEYS = [
+    'customer', 'salesman', 'tsCode', 'fileName',
+    'productType', 'barcodeType', 'barcodeNumber', 'designer',
+]
 
-    # Top left
-    crop_mark = -1
-    crop_mark = p.add_path_point(crop_mark, 0, int(
-        dist_height), "move", "stroke nofill")
-    crop_mark = p.add_path_point(
-        crop_mark, 0, int(size + dist_height), "line", "")
-    crop_mark = p.add_path_point(
-        crop_mark, int(-dist_width), 0, "move", "stroke nofill")
-    crop_mark = p.add_path_point(
-        crop_mark, int(-size - dist_width), 0, "line", "")
-    x = x_margin
-    y = y_margin
-    draw_corner(p, x, y, crop_mark, weight)
+# ---------------------------------------------------------------------------
+# Text-measurement helpers (replace PDFlib info_textline / info_image)
+# ---------------------------------------------------------------------------
+TEXT_HEIGHT = FONT_SIZE * 1.35    # approximate cap+descender height in points
 
-    # Top right
-    crop_mark = -1
-    crop_mark = p.add_path_point(crop_mark, 0, int(
-        dist_height), "move", "stroke nofill")
-    crop_mark = p.add_path_point(
-        crop_mark, 0, int(size + dist_height), "line", "")
-    crop_mark = p.add_path_point(crop_mark, int(
-        dist_width), 0, "move", "stroke nofill")
-    crop_mark = p.add_path_point(
-        crop_mark, int(size + dist_width), 0, "line", "")
-    x = x_margin + width
-    y = y_margin
-    draw_corner(p, x, y, crop_mark, weight)
 
-    # Bottom left
-    crop_mark = -1
-    crop_mark = p.add_path_point(
-        crop_mark, 0, int(-dist_height), "move", "stroke nofill")
-    crop_mark = p.add_path_point(
-        crop_mark, 0, int(-size - dist_height), "line", "")
-    crop_mark = p.add_path_point(
-        crop_mark, int(-dist_width), 0, "move", "stroke nofill")
-    crop_mark = p.add_path_point(
-        crop_mark, int(-size - dist_width), 0, "line", "")
-    x = x_margin
-    y = y_margin - height
-    draw_corner(p, x, y, crop_mark, weight)
+def _tw(text, fsize=FONT_SIZE):
+    """StringWidth in points using Helvetica."""
+    return pdfmetrics.stringWidth(str(text), FONT_NAME, fsize)
 
-    # Bottom right
-    crop_mark = -1
-    crop_mark = p.add_path_point(
-        crop_mark, 0, int(-dist_height), "move", "stroke nofill")
-    crop_mark = p.add_path_point(
-        crop_mark, 0, int(-size - dist_height), "line", "")
-    crop_mark = p.add_path_point(crop_mark, int(
-        dist_width), 0, "move", "stroke nofill")
-    crop_mark = p.add_path_point(
-        crop_mark, int(size + dist_width), 0, "line", "")
-    x = x_margin + width
-    y = y_margin - height
-    draw_corner(p, x, y, crop_mark, weight)
 
-def create_registration_mark(p, radius):
-    registration_mark = -1
-    # Long black lines
-    for step in range(0, 2, 1):
-        registration_mark = p.add_path_point(registration_mark,
-                                                radius, step * 90,
-                                                "move", "stroke nofill  polar")
-        registration_mark = p.add_path_point(registration_mark,
-                                                radius, (step + 2) * 90, "line", "polar")
+# ---------------------------------------------------------------------------
+# Geometry helpers
+# ---------------------------------------------------------------------------
 
-    # Inner circle
-    registration_mark = p.add_path_point(registration_mark,
-                                            -radius / 3, 0, "move",
-                                            "fill nostroke ")
-    registration_mark = p.add_path_point(registration_mark,
-                                            radius / 3, 0, "control", "")
-    registration_mark = p.add_path_point(registration_mark,
-                                            -radius / 3, 0, "circular", "")
+def _get_bleed_trim_gap(boxes):
+    return float(boxes['bleed'][0]) - float(boxes['trim'][0]), \
+           float(boxes['bleed'][1]) - float(boxes['trim'][1])
 
-    # Short white lines
-    for step in range(0, 2, 1):
-        registration_mark = p.add_path_point(registration_mark, radius / 3, step * 90,
-                                                "move", "stroke nofill strokecolor={gray 1} polar")
-        registration_mark = p.add_path_point(registration_mark,
-                                                radius / 3, (step + 2) * 90, "line", "polar")
 
-    # Outer circle
-    registration_mark = p.add_path_point(registration_mark, -2
-                                            * radius / 3, 0, "move",
-                                            "stroke nofill ")
-    registration_mark = p.add_path_point(registration_mark,
-                                            2 * radius / 3, 0, "control", "")
-    registration_mark = p.add_path_point(registration_mark, -2
-                                            * radius / 3, 0, "circular", "")
+def _get_trim_size(boxes):
+    return (float(boxes['trimWidth'])  * POINT_TO_MM,
+            float(boxes['trimHeight']) * POINT_TO_MM)
 
-    return registration_mark
 
-def draw_registration_mark(p, x, y, crop_mark):
-    p.save()
-    p.translate(x, y)
-    p.draw_path(crop_mark, 0, 0, "fill stroke")
-    p.restore()
+def _get_label_height(colors, info, nala_h, logo_h):
+    mat_mach = info.get('materialMachines', [])
+    col_h    = len(colors)         * (TEXT_HEIGHT + 8)
+    mm_h     = len(mat_mach) * 2   * (TEXT_HEIGHT + 4)
+    inf_h    = len(TITLES)         * (TEXT_HEIGHT + 4)
+    return max(nala_h + 10 + logo_h, inf_h, col_h, mm_h) + 10
 
-def draw_registration_marks(p, label_height, boxes, add_info):
-    registration_mark = create_registration_mark(p, 5)
-    trim_width, trim_height = get_trim_size(boxes)
-    text_height= get_text_heigth(p)
-    center_x = MEDIA_EXCESS + CROP_EXCESS + add_info + trim_width / 2
-    center_y = MEDIA_EXCESS + label_height + CROP_EXCESS + trim_height / 2
 
-    top_y = MEDIA_EXCESS + label_height + CROP_EXCESS + trim_height + CROP_MARK_SEPARATION + text_height / 2 + CRUZ_SEPARATION
-    bottom_y = MEDIA_EXCESS + label_height + CROP_EXCESS - CROP_MARK_SEPARATION - text_height / 2 - CRUZ_SEPARATION
-    left_x = MEDIA_EXCESS + CROP_EXCESS + add_info - CROP_MARK_SEPARATION - text_height / 2 - CRUZ_SEPARATION
-    right_x = MEDIA_EXCESS + CROP_EXCESS + add_info + trim_width + CROP_MARK_SEPARATION + text_height / 2 + CRUZ_SEPARATION
-
-    # Draw the top registration mark
-    draw_registration_mark(p, center_x, top_y,  registration_mark)
-
-    # Draw the bottom registration mark
-    draw_registration_mark(p, center_x, bottom_y,  registration_mark)
-    
-    # Draw the left registration mark
-    draw_registration_mark(p, left_x, center_y,  registration_mark)
-    
-    # Draw the right registration mark
-    draw_registration_mark(p, right_x, center_y,  registration_mark)
-    
-    return
-
-def draw_cotas(p, label_height, boxes, add_info ):
-    # Get trim size
-    trim_width, trim_height = get_trim_size(boxes)
-    optlist = get_text_optlist()
-
-    # Calculate center points
-    center_x = MEDIA_EXCESS + CROP_EXCESS + add_info + trim_width / 2
-    center_y = MEDIA_EXCESS + CROP_EXCESS + label_height  + trim_height / 2
-
-    # Get box dimensions as text
-    cota_x_text = str(round(float(boxes["trimWidth"]), 3)) + "mm"
-    cota_y_text = str(round(float(boxes["trimHeight"]), 3)) + "mm"
-
-    # Get text width for different labels
-    cota_x_width = p.info_textline(cota_x_text, "width", optlist)
-    cota_y_width = p.info_textline(cota_y_text, "width", optlist + " rotate=90")
-
-    # Draw labels
-    draw_label_x(p, center_x, trim_width, trim_height, cota_x_width, cota_x_text, add_info, label_height, optlist)
-    optlist += " rotate=90"
-    draw_label_y(p, center_y, trim_height, cota_y_width, cota_y_text, add_info, label_height, optlist)
-
-def draw_label_x(p, center_x, trim_width, trim_height, cota_x_width, cota_x_text, add_info, label_height, optlist):
-    text_height= get_text_heigth(p)
-    # Upper
-    start_x = MEDIA_EXCESS + CROP_EXCESS + add_info
-    start_y = MEDIA_EXCESS + label_height + CROP_EXCESS + trim_height + COTA_SEPARATION
-    p.moveto(start_x, start_y)
-    p.lineto(start_x + trim_width, start_y)
-    p.stroke()
-
-    # Text background
-    p.set_graphics_option("fillcolor={ gray 1}")
-    p.rect(center_x - cota_x_width / 2, start_y, cota_x_width, text_height)
-    p.fill()
-
-    p.set_graphics_option("strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}")
-    p.fit_textline(cota_x_text, center_x - cota_x_width / 2, start_y, optlist)
-
-def draw_label_y(p, center_y, trim_height, cota_y_width, cota_y_text, add_info, label_height, optlist):
-    text_height= get_text_heigth(p)
-    # Left
-    start_x = MEDIA_EXCESS + CROP_EXCESS + add_info - COTA_SEPARATION
-    start_y = MEDIA_EXCESS + label_height + CROP_EXCESS
-
-    p.moveto(start_x, start_y)
-    p.lineto(start_x, start_y + trim_height)
-    p.stroke()
-
-    # Text background
-    p.set_graphics_option("fillcolor={ gray 1}")
-    p.rect(start_x - text_height, center_y - cota_y_width / 2, text_height, cota_y_width)
-    p.fill()
-
-    p.set_graphics_option("strokecolor={ cmyk 0 0 0 1} fillcolor={ cmyk 0 0 0 1}")
-    p.fit_textline(cota_y_text, start_x - text_height, center_y - cota_y_width / 2, optlist)
-   
-def load_client_logo(p, client):
-    logo_client = p.load_image(client.ext, client.logo, "page=1")
-    if logo_client == -1:
-        print_error(p)
-    return logo_client
-
-def load_pdf_document(p, path):
-    pdfdoc = p.open_pdi_document(path, "")
-    if pdfdoc == -1:
-        print_error(p)
-    return pdfdoc
-
-def get_pdf_page(p, pdf, options):
-    page= p.open_pdi_page(pdf, 1, options)
-    if page == -1:
-        print_error(p)
-    return page
-
-def print_error(p):
-    print("Error: " + p.get_errmsg())
-
-def load_body_information(client, outfile, boxes, info):
-    client = findClient(client)
-    title = get_output_file_title(outfile)
-    info = json.loads(info)
-    boxes = json.loads(boxes)
-    return client, title, boxes, info
-
-def get_output_file_title(outfile):
-    paths = outfile.split("\\") if "\\" in outfile else outfile.split("/")
-    return paths[-1]
-
-def get_bleed_trim_gap(boxes):
-    bleed0 = float(boxes["bleed"][0])
-    bleed1 = float(boxes["bleed"][1])
-    trim0 = float(boxes["trim"][0])
-    trim1 = float(boxes["trim"][1])
-    despX = bleed0-trim0
-    despY = bleed1-trim1
-    return despX, despY
-
-def get_trim_size(boxes):
-    trimW = float(boxes["trimWidth"])*POINT_TO_MM_FACTOR
-    trimH = float(boxes["trimHeight"])*POINT_TO_MM_FACTOR
-    return trimW, trimH
-
-def calculate_optlist(p, devicen, colorsJson, index):
-    ceros, cero7, cero5, cero2 = "", "", "", ""
-    for x in range(len(colorsJson)):
-        if (x == index):
-            ceros, cero7, cero5, cero2 = ceros + "1 ", cero7 + "0.7 ", cero5 + "0.5 ", cero2 + "0.2 "
-        else:
-            ceros, cero7, cero5, cero2 = ceros + "0 ", cero7 + "0 ", cero5 + "0 ", cero2 + "0 "
-
-    optlist = f"fontname=Arial fontsize={FONT_SIZE} encoding=unicode fillcolor={{devicen {devicen} {ceros}}}"
-    return ceros, cero7, cero5, cero2, optlist
-
-def draw_separator_line(p, maxLogo, xGen, y):
-    max_color_percentage = get_max_color_percentage(p)
-    # Dibujo la linea separdora
-    p.moveto(2*CROP_SIZE*POINT_TO_MM_FACTOR + maxLogo, y-2)
-    p.lineto(xGen + SQUARE_COLOR_SIZE*2+max_color_percentage, y-2)
-    p.stroke()
-
-def draw_color_lines(p, xGen, y, color, devicen, ceros, cero7, cero5, cero2, optlist):
-    colorname = color["name"]
-    textwidth = p.info_textline(colorname, "width", optlist)
-    p.fit_textline(colorname, xGen-textwidth, y, optlist)
-    p.fit_textline(color["inkCov"]+"%", xGen+20, y, optlist)
-    p.set_graphics_option(
-        f"fillcolor={{ devicen {devicen} {ceros}}}")
-    p.rect(xGen+2, y+4, SQUARE_COLOR_SIZE, 4)
-    p.fill()
-    p.set_graphics_option(
-        f"fillcolor={{ devicen {devicen} {cero7}}}")
-    p.rect(xGen+2, y, SQUARE_COLOR_SIZE, 4)
-    p.fill()
-    p.set_graphics_option(
-        f"fillcolor={{ devicen {devicen} {cero5}}}")
-    p.rect(xGen+2+SQUARE_COLOR_SIZE, y+4, SQUARE_COLOR_SIZE, 4)
-    p.fill()
-    p.set_graphics_option(
-        f"fillcolor={{ devicen {devicen} {cero2}}}")
-    p.rect(xGen+2+SQUARE_COLOR_SIZE, y, SQUARE_COLOR_SIZE, 4)
-    p.fill()
-    p.set_graphics_option(
-        f"strokecolor={{ devicen {devicen} {ceros}}}")
-    
-def get_text_optlist():
-    optlist = "fontname=Arial fontsize=" + str(FONT_SIZE) + " encoding=unicode"
-    return optlist
-
-def get_text_heigth(p):
-    optlist = get_text_optlist()
-    text_height = p.info_textline("Un color", "height", optlist)
-    return text_height
-
-def get_label_height(p, colorsJson, info, nala_height, logo_client_height):
-    text_height= get_text_heigth(p)
-    material_machines = info["materialMachines"]
-    heights = []
-    colors_height = len(colorsJson)*(text_height+8)
-    mat_mach_height = len(material_machines)*2*(text_height+4)
-    infos_height = len(TITLES)*(text_height+4)
-    
-
-    heights.append(nala_height+10+logo_client_height)
-    heights.append(infos_height)
-    heights.append(colors_height)
-    heights.append(mat_mach_height)
-
-    label_height = max(heights)+10
-    return label_height
-
-def get_max_color_width(p, colorsJson):
-    optlist = get_text_optlist()
-    max_color_width = max([p.info_textline(color["name"], "width", optlist) for color in colorsJson])
-    return max_color_width
-
-def get_max_info_width(p, info):
-    optlist = get_text_optlist()
-    max_info = max(p.info_textline(info[key], "width", optlist) for key in KEYS)
-    return max_info
-
-def get_max_machine_width(p, material_machines):
-    optlist = get_text_optlist()
-    max_machine = max(
-        max(p.info_textline(mm["machine"], "width", optlist), p.info_textline(mm["material"], "width", optlist))
-        for mm in material_machines
+def _get_label_width(colors, info, logo_w):
+    mat_mach = info.get('materialMachines', [])
+    max_col  = max((_tw(c['name']) for c in colors), default=0)
+    max_pct  = _tw('100.00%  ')
+    max_inf  = max((_tw(info.get(k, '')) for k in KEYS), default=0)
+    max_mach = max(
+        (max(_tw(mm.get('machine', '')), _tw(mm.get('material', '')))
+         for mm in mat_mach),
+        default=0,
     )
-    return max_machine
-
-def get_logo_width(p, logo_client):
-    logo_width = p.info_image(logo_client, "width", "scale=0.05")
-    return logo_width
-
-def get_max_color_percentage(p):
-    optlist = get_text_optlist()
-    max_color_percentage = p.info_textline("100.00%  ", "width", optlist)
-    return max_color_percentage
-
-def get_max_info_key(p):
-    optlist = get_text_optlist()
-    max_info_key = p.info_textline(" Tipo de producto:", "width", optlist)
-    return max_info_key
-
-def get_machine_key(p):
-    optlist = get_text_optlist()
-    machine_key = p.info_textline("Maquina:", "width", optlist)
-    return machine_key
-
-def get_salida_width(p):
-    optlist = get_text_optlist()
-    salida_width = p.info_textline("Salida:", "width", optlist)
-    return salida_width
-
-def get_keys_width(p, colorsJson, info, logo_client):
-    material_machines = info["materialMachines"]
-    max_color_percentage = get_max_color_percentage(p)
-    max_info_key = get_max_info_key(p)
-    max_machine_key = get_machine_key(p)
-    salida_width = get_salida_width(p)
-    max_color_name = get_max_color_width(p, colorsJson)
-    max_info = get_max_info_width(p, info)
-    max_machine = get_max_machine_width(p, material_machines)
-    max_logo = get_logo_width(p, logo_client)
-    return max_color_percentage, max_info_key, max_machine_key, salida_width, max_color_name, max_info, max_machine, max_logo
-
-def get_label_width(p, colorsJson, info, logo_client):
-    max_color_percentage, max_info_key, max_machine_key, salida_width, max_color_name, max_info, max_machine, max_logo = get_keys_width(p, colorsJson, info, logo_client)
-
-    logo_color_gap = 10
-    total_color = max_color_name + logo_color_gap + SQUARE_COLOR_SIZE*2 + max_color_percentage
-
-    color_info_gap = 15
-    total_info = max_info_key + color_info_gap + max_info
-
-    info_machine_gap = 10
-    total_machine = max_machine_key + info_machine_gap + max_machine
-
-    salida_img_width = 25
-    total_salida = salida_width + salida_img_width
-
-    label_width = max_logo + total_color + total_info + total_machine + total_salida
-    return label_width
-
-def get_total_width(label_width, trimW):
-    widths = []
-    widths.append(label_width)
-    widths.append(trimW)
-    return max(widths)
-
-def get_add_info(label_width, trimW):
-    add_info = 0
-    if label_width > trimW:
-        add_info = (label_width-trimW)/2
-    return add_info
-
-def generate_box_string(x1, y1, x2, y2):
-    return f"{{ {x1} {y1} {x2} {y2} }}"
-
-def get_boxes_size(label_height, trimW, trimH, total_width, add_info):
-    baseX = MEDIA_EXCESS + CROP_EXCESS + add_info
-    baseY = MEDIA_EXCESS + CROP_EXCESS + label_height 
-    trimbox = generate_box_string(baseX, baseY, baseX+trimW, baseY+trimH)
-    
-    baseX_bleed = baseX - BLEED_EXCESS
-    baseY_bleed = baseY - BLEED_EXCESS
-    bleedbox = generate_box_string(baseX_bleed, baseY_bleed, baseX_bleed+trimW+BLEED_EXCESS, baseY_bleed+trimH+BLEED_EXCESS)
-    
-    baseX_crop = MEDIA_EXCESS
-    baseY_crop = MEDIA_EXCESS
-    cropbox = generate_box_string(baseX_crop, baseY_crop, baseX_crop+CROP_EXCESS*2+total_width, baseY_crop+label_height+CROP_EXCESS*2+trimH)
-
-    return trimbox, bleedbox, cropbox
+    total_col   = max_col + 10 + SQUARE_COLOR_SIZE * 2 + max_pct
+    total_info  = _tw(' Tipo de producto:') + 15 + max_inf
+    total_mach  = _tw('Maquina:') + 10 + max_mach
+    total_sal   = _tw('Salida:') + 25
+    return logo_w + total_col + total_info + total_mach + total_sal
 
 
-def draw_colors_section(p, x, y, colorsJson, devicen, max_logo):
-    max_color_name = get_max_color_width(p, colorsJson)
-    x += max_color_name
-    text_height= get_text_heigth(p)
-    # Dibujo colores
-    for index, color in enumerate(colorsJson, start=0):
-        ceros, cero7, cero5, cero2, optlist = calculate_optlist(p, devicen, colorsJson, index)
-        draw_color_lines(p, x, y, color, devicen, ceros, cero7, cero5, cero2, optlist)
-        draw_separator_line(p, max_logo, x, y)
+# ---------------------------------------------------------------------------
+# Drawing helpers (all draw onto a ReportLab Canvas)
+# ---------------------------------------------------------------------------
 
-        y = y-text_height-8
+def _draw_crop_marks(c, x_margin, y_margin, size, weight, dh, dw, w, h):
+    """Draw 4 L-shaped crop-mark corners."""
+    c.setStrokeColor(black)
+    c.setLineWidth(weight)
+    top    = y_margin
+    bottom = y_margin - h
+    left   = x_margin
+    right  = x_margin + w
+    # Top-left
+    c.line(left,  top + dh,        left,  top + dh + size)
+    c.line(left - dw, top,         left - dw - size, top)
+    # Top-right
+    c.line(right, top + dh,        right, top + dh + size)
+    c.line(right + dw, top,        right + dw + size, top)
+    # Bottom-left
+    c.line(left,  bottom - dh,     left,  bottom - dh - size)
+    c.line(left - dw, bottom,      left - dw - size, bottom)
+    # Bottom-right
+    c.line(right, bottom - dh,     right, bottom - dh - size)
+    c.line(right + dw, bottom,     right + dw + size, bottom)
+
+
+def _draw_one_reg_mark(c, cx, cy, radius):
+    """Cross + concentric circles registration mark."""
+    c.setStrokeColor(black)
+    c.setFillColor(black)
+    c.setLineWidth(0.5)
+    c.line(cx - radius, cy, cx + radius, cy)
+    c.line(cx, cy - radius, cx, cy + radius)
+    c.circle(cx, cy, radius / 3, stroke=0, fill=1)
+    c.setStrokeColor(white)
+    c.setLineWidth(0.5)
+    c.line(cx - radius / 3, cy, cx + radius / 3, cy)
+    c.line(cx, cy - radius / 3, cx, cy + radius / 3)
+    c.setStrokeColor(black)
+    c.circle(cx, cy, 2 * radius / 3, stroke=1, fill=0)
+
+
+def _draw_registration_marks(c, label_height, boxes, add_info):
+    trim_w, trim_h = _get_trim_size(boxes)
+    cx = MEDIA_EXCESS + CROP_EXCESS + add_info + trim_w / 2
+    cy = MEDIA_EXCESS + label_height + CROP_EXCESS + trim_h / 2
+    r  = 5
+
+    top_y    = MEDIA_EXCESS + label_height + CROP_EXCESS + trim_h + CROP_MARK_SEP + TEXT_HEIGHT / 2 + CRUZ_SEP
+    bottom_y = MEDIA_EXCESS + label_height + CROP_EXCESS - CROP_MARK_SEP - TEXT_HEIGHT / 2 - CRUZ_SEP
+    left_x   = MEDIA_EXCESS + CROP_EXCESS + add_info - CROP_MARK_SEP - TEXT_HEIGHT / 2 - CRUZ_SEP
+    right_x  = MEDIA_EXCESS + CROP_EXCESS + add_info + trim_w + CROP_MARK_SEP + TEXT_HEIGHT / 2 + CRUZ_SEP
+
+    for px, py in [(cx, top_y), (cx, bottom_y), (left_x, cy), (right_x, cy)]:
+        _draw_one_reg_mark(c, px, py, r)
+
+
+def _draw_cotas(c, label_height, boxes, add_info):
+    trim_w, trim_h = _get_trim_size(boxes)
+    cx = MEDIA_EXCESS + CROP_EXCESS + add_info + trim_w / 2
+    cy = MEDIA_EXCESS + CROP_EXCESS + label_height + trim_h / 2
+
+    cota_x = str(round(float(boxes['trimWidth']),  3)) + 'mm'
+    cota_y = str(round(float(boxes['trimHeight']), 3)) + 'mm'
+    cota_xw = _tw(cota_x)
+    cota_yw = _tw(cota_y)
+
+    # ---- Horizontal cota (above trim) ----
+    start_x = MEDIA_EXCESS + CROP_EXCESS + add_info
+    start_y = MEDIA_EXCESS + label_height + CROP_EXCESS + trim_h + COTA_SEP
+    c.setStrokeColor(black)
+    c.setLineWidth(0.5)
+    c.line(start_x, start_y, start_x + trim_w, start_y)
+    # White background behind text
+    c.setFillColor(white)
+    c.rect(cx - cota_xw / 2, start_y, cota_xw, TEXT_HEIGHT, stroke=0, fill=1)
+    c.setFillColor(black)
+    c.setFont(FONT_NAME, FONT_SIZE)
+    c.drawString(cx - cota_xw / 2, start_y, cota_x)
+
+    # ---- Vertical cota (left of trim) ----
+    lx = MEDIA_EXCESS + CROP_EXCESS + add_info - COTA_SEP
+    c.line(lx, MEDIA_EXCESS + label_height + CROP_EXCESS,
+           lx, MEDIA_EXCESS + label_height + CROP_EXCESS + trim_h)
+    c.setFillColor(white)
+    c.rect(lx - TEXT_HEIGHT, cy - cota_yw / 2, TEXT_HEIGHT, cota_yw, stroke=0, fill=1)
+    c.saveState()
+    c.translate(lx - TEXT_HEIGHT, cy - cota_yw / 2)
+    c.rotate(90)
+    c.setFillColor(black)
+    c.drawString(0, 0, cota_y)
+    c.restoreState()
+
+
+def _draw_colors_section(c, x0, y0, colors, spot_colors, max_logo):
+    """Draw colour swatches + names + ink coverage column. Returns new x."""
+    max_col_w = max((_tw(col['name']) for col in colors), default=0)
+    x = x0 + max_col_w
+    y = y0
+    max_pct = _tw('100.00%  ')
+
+    for i, color in enumerate(colors):
+        spot = spot_colors[color['name']]
+        name = color['name']
+        ink_cov = str(color.get('inkCov', '')) + '%'
+
+        # Colour name (right-aligned to x)
+        c.setFillColor(spot)
+        c.setFont(FONT_NAME, FONT_SIZE)
+        nw = _tw(name)
+        c.drawString(x - nw, y, name)
+
+        # Ink coverage %
+        c.setFillColor(black)
+        c.drawString(x + 20, y, ink_cov)
+
+        # 4 swatch boxes: 100%, 70%, 50%, 20%
+        for j, tint in enumerate([1.0, 0.7, 0.5, 0.2]):
+            tinted = CMYKColor(
+                spot.cyan * tint, spot.magenta * tint,
+                spot.yellow * tint, spot.black * tint,
+                spotName=spot.spotName, density=tint,
+            )
+            c.setFillColor(tinted)
+            bx = x + 2 + (j % 2) * SQUARE_COLOR_SIZE
+            by = y if j >= 2 else y + 4
+            c.rect(bx, by, SQUARE_COLOR_SIZE, 4, stroke=0, fill=1)
+
+        # Separator line
+        c.setStrokeColor(black)
+        c.setLineWidth(0.3)
+        x_sep_start = 2 * CROP_SIZE * POINT_TO_MM + max_logo
+        x_sep_end   = x + SQUARE_COLOR_SIZE * 2 + max_pct
+        c.line(x_sep_start, y - 2, x_sep_end, y - 2)
+
+        y -= TEXT_HEIGHT + 8
+
     return x
 
-def draw_info_section(p, x, y, info):
-    text_height= get_text_heigth(p)
-    max_info_key = get_max_info_key(p)
-    max_color_percentage = get_max_color_percentage(p)
-    max_info = get_max_info_width(p, info)
-    
-    # Escribo infos
-    optlist = "fontname=Arial fontsize=" + \
-        str(FONT_SIZE)+" encoding=unicode fillcolor={ Black }"
-    
-    x = x+SQUARE_COLOR_SIZE*2+max_color_percentage+5+max_info_key
-    p.set_graphics_option("strokecolor={ cmyk 0 0 0 1}")
 
-    for index, key in enumerate(KEYS, start=0):
-        textline = TITLES[index]
-        textwidth = p.info_textline(textline, "width", optlist)
-        p.fit_textline(textline, x-textwidth, y, optlist)
+def _draw_info_section(c, x0, y0, info):
+    """Draw the job-info key/value rows. Returns new x."""
+    max_key = _tw(' Tipo de producto:')
+    max_val = max((_tw(str(info.get(k, ''))) for k in KEYS), default=0)
+    x = x0 + SQUARE_COLOR_SIZE * 2 + _tw('100.00%  ') + 5 + max_key
+    y = y0
 
-        p.moveto(x-textwidth, y-2)
-        p.lineto(x, y-2)
-        p.stroke()
-        textline = info[key]
-        textwidth = p.info_textline(textline, "width", optlist)
-        p.fit_textline(textline, x+2, y, optlist)
-        y = y-text_height-4
+    c.setStrokeColor(black)
+    c.setFillColor(black)
+    c.setFont(FONT_NAME, FONT_SIZE)
 
-    x += max_info
-    x += max_info_key
-    return x
+    for i, key in enumerate(KEYS):
+        title = TITLES[i]
+        value = str(info.get(key, ''))
+        tw_title = _tw(title)
+        c.drawString(x - tw_title, y, title)
+        c.setLineWidth(0.3)
+        c.line(x - tw_title, y - 2, x, y - 2)
+        c.drawString(x + 2, y, value)
+        y -= TEXT_HEIGHT + 4
 
-def draw_machine_section(p, x, y, info):
-    material_machines = info["materialMachines"]
-    optlist = get_text_optlist()
-    text_height= get_text_heigth(p)
-    max_machine = get_max_machine_width(p, material_machines)
-    max_machine_key = get_machine_key(p)
+    return x + max_val + max_key
 
-    # Escribo materiales
-    materialwidth = p.info_textline("Material:", "width", optlist)
-    
-    for mm in material_machines:
-        p.fit_textline("Maquina:", x-max_machine_key, y, optlist)
-        p.moveto(x-max_machine_key, y-2)
-        p.lineto(x, y-2)
-        p.stroke()
-        p.fit_textline(mm["machine"], x+2, y, optlist)
-        y = y-text_height-4
 
-        p.fit_textline("Material:", x-materialwidth, y, optlist)
-        p.moveto(x-materialwidth, y-2)
-        p.lineto(x, y-2)
-        p.stroke()
-        p.fit_textline(mm["material"], x+2, y, optlist)
-        y = y-text_height-4
-    x += max_machine
-    return x
+def _draw_machine_section(c, x0, y0, info):
+    """Draw machine/material rows. Returns new x."""
+    mat_mach  = info.get('materialMachines', [])
+    max_mach  = max(
+        (max(_tw(mm.get('machine', '')), _tw(mm.get('material', '')))
+         for mm in mat_mach),
+        default=0,
+    )
+    key_w = _tw('Maquina:')
+    x = x0
+    y = y0
 
-def load_salida_img(p, salida):
-    searchpath = './data/embobinado'
-    p.set_option("searchpath={{" + searchpath + "}}")
-    img_salida = p.load_image('png',salida, "page=1")
-    img_salida_height = p.info_image(img_salida, "height", "scale=0.25")
-    
-    if img_salida == -1:
-        print("Error: " + p.get_errmsg())
-        next
-    return img_salida, img_salida_height
+    c.setFillColor(black)
+    c.setFont(FONT_NAME, FONT_SIZE)
+    c.setStrokeColor(black)
 
-def draw_salida_section(p, x, y, salida):
-    salida += '.png'
-    salida_width = get_salida_width(p)
-    optlist = get_text_optlist()
-    text_height= get_text_heigth(p)
-    x = x+salida_width
-    img_salida, img_salida_height = load_salida_img(p, salida)
+    for mm in mat_mach:
+        c.drawString(x - key_w, y, 'Maquina:')
+        c.setLineWidth(0.3)
+        c.line(x - key_w, y - 2, x, y - 2)
+        c.drawString(x + 2, y, mm.get('machine', ''))
+        y -= TEXT_HEIGHT + 4
 
-    p.fit_textline("Salida:", x, y, optlist)
-    p.fit_image(img_salida, x, y-text_height-img_salida_height-4, "scale=0.25")
+        mat_kw = _tw('Material:')
+        c.drawString(x - mat_kw, y, 'Material:')
+        c.line(x - mat_kw, y - 2, x, y - 2)
+        c.drawString(x + 2, y, mm.get('material', ''))
+        y -= TEXT_HEIGHT + 4
 
-def get_nala_pdf(p):
-    # Open the input PDF, Nala PDF for the label */
-    p.set_option("searchpath={" + SEARCH_DATA_PATH + "}")
-    nalapdf = load_pdf_document(p, 'nala-rotulo.pdf')
-    nalapage = get_pdf_page(p, nalapdf, "")
-    nala_height = p.pcos_get_number(nalapdf, "pages[0]/height")*0.6
-    return nalapdf, nalapage, nala_height
+    return x + max_mach
 
-def get_logo_client(p, client):
-    p.set_option("searchpath={" + SEARCH_DATA_PATH + "}")
-    logo_client = load_client_logo(p, client)
-    logo_client_height = p.info_image(logo_client, "height", "scale=0.05")
-    return logo_client, logo_client_height
 
-def get_pdf_unitario(p, pdffile, searchpath) :
-    p.set_option("searchpath={" + searchpath + "}")
-    unitario = load_pdf_document(p, pdffile)
-    page = get_pdf_page(p, unitario, "pdiusebox=bleed")
-    unitario_height = p.pcos_get_number(unitario, "pages[0]/height")
-    unitario_width = p.pcos_get_number(unitario, "pages[0]/width")
-    return unitario, page, unitario_height,unitario_width
+def _draw_salida_section(c, x0, y0, salida):
+    """Draw salida label + image."""
+    sal_w = _tw('Salida:')
+    c.setFillColor(black)
+    c.setFont(FONT_NAME, FONT_SIZE)
+    c.drawString(x0 + sal_w, y0, 'Salida:')
+    img_path = os.path.join(DATA_PATH, 'embobinado', salida + '.png')
+    if os.path.exists(img_path):
+        try:
+            img_h = 25 * 0.25  # approximate
+            c.drawImage(img_path, x0 + sal_w, y0 - TEXT_HEIGHT - img_h - 4,
+                        width=25, height=25, preserveAspectRatio=True)
+        except Exception:
+            pass  # image missing – skip gracefully
 
-def add_separation_pages(p, separations_folder, path_images, names, width, height):
-    for index, image in enumerate(path_images, start=0):
-        tif = p.load_image("tiff", separations_folder+image, "page=1")
-        if tif == -1:
-            print("Error: " + p.get_errmsg())
-            next
 
-        # Start a new page
-        p.begin_page_ext(float(width), float(height)+10, "")
-        p.fit_image(tif, 0.0, 10, "adjustpage")
-        p.close_image(tif)
-        optlist = "fontname=Helvetica fontsize=10 encoding=unicode  fillcolor={ Black }"
+# ---------------------------------------------------------------------------
+# Main make() function
+# ---------------------------------------------------------------------------
 
-        textline = names[index]
-        p.fit_textline(textline, 0, 0, optlist)
-        p.end_page_ext("")
-        print(image)
+def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
+         separations_folder, path_images, names):
+    client_obj, title, boxes, info = _load_body_info(client, outfile, boxes, info)
 
-def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info, separations_folder, path_images, names):
-    client, title, boxes, info = load_body_information(client, outfile, boxes, info)
-    try:
-        p = PDFlib()
-        # Set license key
-        if ENV == "development":
-            print("we are in development mode. do not worry about license")
-        elif ENV == "production":
-            p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
-        # This means we must check return values of load_font() etc.
-        p.set_option("errorpolicy=return")
+    spot_colors = make_spot_colors(colorsJson)
 
-        pageopen = False
-        if p.begin_document(outfile, "") == -1:
-            print_error(p)
+    # ---- Measure Nala logo dimensions from its PDF ----
+    nala_pdf_path = os.path.join(DATA_PATH, 'nala-rotulo.pdf')
+    nala_reader   = PdfReader(nala_pdf_path)
+    nala_h = float(nala_reader.pages[0].mediabox.height) * 0.6
+    nala_w = float(nala_reader.pages[0].mediabox.width)  * 0.6
 
-        # Get Nala PDF for label
-        nalapdf, nalapage, nala_height = get_nala_pdf(p)
-        # Open the input PDF unitario */
-        unitario, page, unitario_height, unitario_width = get_pdf_unitario(p, pdffile, searchpath)
-        # Open client logo
-        logo_client, logo_client_height = get_logo_client(p, client)
+    # ---- Measure client logo ----
+    logo_path = client_obj.logo
+    logo_w = 0
+    logo_h = 0
+    if os.path.exists(logo_path):
+        try:
+            from PIL import Image as PILImage
+            img = PILImage.open(logo_path)
+            iw, ih = img.size          # pixels
+            # Scale factor 0.05 → approximate pt size (72 pt/in, 96 dpi assumed)
+            logo_w = iw * 72 / 96 * 0.05
+            logo_h = ih * 72 / 96 * 0.05
+        except Exception:
+            logo_w, logo_h = 30, 10   # safe fallback
 
-        despX, despY = get_bleed_trim_gap(boxes)
-        trimW, trimH = get_trim_size(boxes)
-    
-        devicen = make_devicen(p, colorsJson)
-        
-        # Define height for the label
-        label_height = get_label_height(p, colorsJson, info, nala_height, logo_client)    
-        # Define width for the label
-        label_width = get_label_width(p, colorsJson, info, logo_client)
+    # ---- Get source PDF dimensions ----
+    src_reader  = PdfReader(pdffile)
+    src_w = float(src_reader.pages[0].mediabox.width)
+    src_h = float(src_reader.pages[0].mediabox.height)
 
-        # Chequeo donde comenzar a escribir los colores
-        total_width = get_total_width(label_width, trimW)
-        add_info = get_add_info(label_width, trimW)
+    # ---- Layout calculations ----
+    desp_x, desp_y = _get_bleed_trim_gap(boxes)
+    trim_w, trim_h = _get_trim_size(boxes)
+    label_h = _get_label_height(colorsJson, info, nala_h, logo_h)
+    label_w = _get_label_width(colorsJson, info, logo_w)
+    total_w  = max(label_w, trim_w)
+    add_info = (label_w - trim_w) / 2 if label_w > trim_w else 0
 
-        trimbox, bleedbox, cropbox = get_boxes_size(label_height, trimW, trimH, total_width, add_info)
+    media_w  = total_w  + CROP_EXCESS * 2 + MEDIA_EXCESS * 2
+    media_h  = trim_h   + label_h + CROP_EXCESS * 2 + MEDIA_EXCESS * 2
 
-        mediaWidth = total_width+CROP_EXCESS*2+MEDIA_EXCESS*2
-        mediaHeight = trimH+label_height+CROP_EXCESS*2+MEDIA_EXCESS*2
+    # Position of the source PDF bottom-left corner inside the output page
+    offset_x = MEDIA_EXCESS + CROP_EXCESS + add_info + desp_x
+    offset_y = MEDIA_EXCESS + label_h + CROP_EXCESS + desp_y
 
-        max_logo = get_logo_width(p, logo_client)
+    # ---- Build the output PDF ----
+    writer = PdfWriter()
+    src_page = src_reader.pages[0]
 
-        # Start a new page
-        if not pageopen:
-            p.begin_page_ext(mediaWidth, mediaHeight, "trimbox=" +
-                             trimbox+" bleedbox="+bleedbox+" cropbox="+cropbox)
-            pageopen = True
+    # Create a blank page of the target size and merge the source at its offset
+    main_page = writer.add_blank_page(media_w, media_h)
+    main_page.merge_transformed_page(
+        src_page,
+        Transformation().translate(tx=offset_x, ty=offset_y),
+    )
 
-        # Fit PDF unitario
-        p.fit_pdi_page(page, MEDIA_EXCESS+CROP_EXCESS+add_info+despX,
-                       MEDIA_EXCESS+label_height+CROP_EXCESS+despY, "")
-        
-        # Fit PDF nala
-        p.fit_pdi_page(nalapage, MEDIA_EXCESS+CROP_EXCESS,
-                       MEDIA_EXCESS+label_height-nala_height, "scale={0.6 0.6}")
-        p.close_pdi_page(nalapage)
-        p.close_pdi_document(nalapdf)
+    # ---- Draw the label overlay with ReportLab ----
+    label_buf = io.BytesIO()
+    c = Canvas(label_buf, pagesize=(media_w, media_h))
+    c.setFont(FONT_NAME, FONT_SIZE)
 
-        # Fit IMG logo client
-        p.fit_image(logo_client, MEDIA_EXCESS+CROP_EXCESS,
-                    MEDIA_EXCESS+label_height-nala_height-10-logo_client_height, "scale=0.05")
-        p.close_image(logo_client)
+    # Nala logo (PDF placed as image via pypdf later — here we draw a placeholder rect)
+    nala_x   = MEDIA_EXCESS + CROP_EXCESS
+    nala_y   = MEDIA_EXCESS + label_h - nala_h
+    # Embed Nala PDF page as image overlay (separate merge step below)
 
-        # Dibujo cruces de regisro
-        ones = ""
-        for x in range(len(colorsJson)):
-            ones = ones + "1 "
+    # Client logo image
+    logo_x = MEDIA_EXCESS + CROP_EXCESS
+    logo_y = MEDIA_EXCESS + label_h - nala_h - 10 - logo_h
+    if os.path.exists(logo_path):
+        try:
+            c.drawImage(logo_path, logo_x, logo_y,
+                        width=logo_w, height=logo_h, preserveAspectRatio=True)
+        except Exception:
+            pass
 
-        p.set_graphics_option("fillcolor={devicen " + str(devicen)+" " + ones +
-                              "} strokecolor={devicen " + str(devicen)+" " + ones + "} linewidth=0.01")
+    # Crop marks (black, will overprint in prepress workflow)
+    crop_m_y = MEDIA_EXCESS + label_h + CROP_EXCESS + trim_h
+    _draw_crop_marks(
+        c,
+        MEDIA_EXCESS + CROP_EXCESS + add_info,
+        crop_m_y,
+        CROP_SIZE * POINT_TO_MM, 0.01,
+        0, 0,
+        trim_w, trim_h,
+    )
 
-        # Dibujo marcas de corte
-        draw_crop_marks(p, MEDIA_EXCESS+CROP_EXCESS+add_info,  MEDIA_EXCESS+label_height +
-                        CROP_EXCESS+trimH, CROP_SIZE*POINT_TO_MM_FACTOR, 0.01, 0, 0, trimW, trimH)
+    # Registration marks
+    _draw_registration_marks(c, label_h, boxes, add_info)
 
-        # Dibujo marcas de registro
-        draw_registration_marks(p, label_height, boxes, add_info)
+    # Cotas
+    _draw_cotas(c, label_h, boxes, add_info)
 
-        # Dibujo cotas
-        draw_cotas(p, label_height, boxes, add_info)
+    # ---- Colour section ----
+    x_gen = MEDIA_EXCESS + CROP_EXCESS + logo_w + 10
+    y_gen = MEDIA_EXCESS + label_h - 10
+    x_gen = _draw_colors_section(c, x_gen, y_gen, colorsJson, spot_colors, logo_w)
 
-        xGen = MEDIA_EXCESS + CROP_EXCESS + max_logo + 10
-        yGen = MEDIA_EXCESS + label_height - 10
-        
-        # Dibujo seccion de colores
-        xGen = draw_colors_section(p, xGen, yGen, colorsJson, devicen, max_logo)
+    # ---- Info section ----
+    x_gen = _draw_info_section(c, x_gen, y_gen, info)
 
-        # Dibujo seccion de info
-        xGen = draw_info_section(p, xGen, yGen, info)
+    # ---- Machine section ----
+    x_gen = _draw_machine_section(c, x_gen, y_gen, info)
 
-        # Dibujo seccion de maquinas
-        xGen = draw_machine_section(p, xGen, yGen, info)
-        
+    # ---- Salida section ----
+    salida = info.get('salida', '')
+    if salida:
+        _draw_salida_section(c, x_gen, y_gen, salida)
 
-        salida = info["salida"]
-        #Escribo salida 
-        if salida != '':
-            draw_salida_section(p, x, yGen, salida)
-            
-            
-        p.close_pdi_page(page)
-        p.end_page_ext("")
+    c.showPage()
+    c.save()
 
-        #agrego las demas paginas con las separaciones
-        add_separation_pages(p, separations_folder, path_images, names, unitario_width, unitario_height)
-        
-        p.close_pdi_document(unitario)
-        p.end_document("")
+    # Merge label overlay onto the main page
+    label_buf.seek(0)
+    label_reader = PdfReader(label_buf)
+    main_page.merge_page(label_reader.pages[0])
 
-    except PDFlibException as ex:
-        print("PDFlib exception occurred:")
-        print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))
+    # Merge the Nala logo (from the nala-rotulo PDF) at top-left of label area
+    nala_reader2  = PdfReader(nala_pdf_path)
+    nala_src_page = nala_reader2.pages[0]
+    scale = 0.6
+    main_page.merge_transformed_page(
+        nala_src_page,
+        Transformation().scale(scale, scale).translate(
+            tx=nala_x, ty=nala_y,
+        ),
+    )
 
-    except Exception as ex:
-        print(ex)
+    # ---- Separation pages ----
+    for index, image_name in enumerate(path_images):
+        img_path = separations_folder + image_name
+        sep_h    = src_h + 10
 
-    finally:
-        if p:
-            p.delete()
+        sep_buf = io.BytesIO()
+        sep_c   = Canvas(sep_buf, pagesize=(src_w, sep_h))
+        sep_c.drawImage(img_path, 0, 10, width=src_w, height=src_h,
+                        preserveAspectRatio=True)
+        sep_c.setFont('Helvetica', 10)
+        sep_c.setFillColor(black)
+        sep_c.drawString(0, 0, names[index])
+        sep_c.showPage()
+        sep_c.save()
+
+        sep_buf.seek(0)
+        sep_reader = PdfReader(sep_buf)
+        writer.add_page(sep_reader.pages[0])
+        print(image_name)
+
+    with open(outfile, 'wb') as f:
+        writer.write(f)
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _load_body_info(client, outfile, boxes, info):
+    client_obj = findClient(client)
+    sep = '\\' if '\\' in outfile else '/'
+    title = outfile.split(sep)[-1]
+    info  = json.loads(info)  if isinstance(info,  str) else info
+    boxes = json.loads(boxes) if isinstance(boxes, str) else boxes
+    return client_obj, title, boxes, info

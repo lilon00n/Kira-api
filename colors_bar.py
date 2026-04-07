@@ -1,136 +1,64 @@
-import os
-ENV = os.getenv("ENV")
-import sys
-from PDFlib.PDFlib import *
+﻿# -*- coding: utf-8 -*-
+"""
+colors_bar.py
+Draws filled colored rectangles (a "bar" at multiple intensity levels) for each
+spot color at a given position on the PDF.
+intensities: comma-separated list of tint values, e.g. "1,0.7,0.5,0.2"
+Migrated from PDFlib to reportlab + pypdf.
+"""
+
 import json
-from make_devicen import make_devicen
+import os
+from color_utils import make_spot_colors
+from pdf_utils import get_source_info, create_overlay_canvas, finalize_and_merge_multipage
 
 
 def make(searchpath, pdffile, outfile, colors, intensities, size, x, y, place, sideX, sideY):
-    paths = outfile.split("\\")
-    if len(paths) == 1:
-        paths = outfile.split("/")
-    title = paths[len(paths)-1]
-    intensities = intensities.split(',')
+    intensities = [float(v) for v in str(intensities).split(',')]
+    size = float(size)
     x = float(x)
     y = float(y)
-    size = float(size)
-    p = None
 
-    try:
-        p = PDFlib()
+    page_width, page_height, num_pages = get_source_info(pdffile)
+    spot_colors = make_spot_colors(colors)
 
-        p.set_option("searchpath={" + searchpath + "}")
-        if ENV == "development":
-            print("we are in development mode. do not worry about license")
-        elif ENV == "production":
-            p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
+    ret_x = x
+    ret_y = y
 
-        # This means we must check return values of load_font() etc.
-        p.set_option("errorpolicy=return")
+    pages_overlays = []
+    for _ in range(num_pages):
+        c, buf = create_overlay_canvas(page_width, page_height)
 
-        # Open the input PDF */
-        indoc = p.open_pdi_document(pdffile, "")
-        if indoc == -1:
-            print("Error: " + p.get_errmsg())
-            next
+        cur_x = x
+        cur_y = page_height - y
 
-        pagewidth = p.pcos_get_number(indoc, "pages[0]/width")
-        pageheight = p.pcos_get_number(indoc, "pages[0]/height")
+        for color in colors:
+            base_spot = spot_colors[color['name']]
+            for tint in intensities:
+                from reportlab.lib.colors import CMYKColor
+                tinted = CMYKColor(
+                    base_spot.cyan * tint,
+                    base_spot.magenta * tint,
+                    base_spot.yellow * tint,
+                    base_spot.black * tint,
+                    spotName=base_spot.spotName,
+                    density=tint,
+                )
+                c.setFillColor(tinted)
+                c.setStrokeColor(tinted)
 
-        endpage = p.pcos_get_number(indoc, "length:pages")
-        pageopen = False
+                if place in ('T', 'B'):
+                    c.rect(cur_x, cur_y - size, size, size, stroke=0, fill=1)
+                    cur_x += size
+                else:
+                    c.rect(cur_x, cur_y - size, size, size, stroke=0, fill=1)
+                    cur_y -= size
 
-        if p.begin_document(outfile, "") == -1:
-            raise "Error: " + p.get_errmsg()
+        ret_x = cur_x
+        ret_y = page_height - cur_y
 
-        p.set_info("Creator", "Nala by Verdant Solution")
-        p.set_info("Title", title)
+        c.showPage()
+        pages_overlays.append((c, buf))
 
-        devicen = make_devicen(p, colors)
-
-        # Loop over all pages of the input document
-        for pageno in range(1, int(endpage)+1, 1):
-            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
-
-            if page == -1:
-                print("Error: " + p.get_errmsg())
-                next
-            # Start a new page
-            if not pageopen:
-                p.begin_page_ext(float(pagewidth), float(pageheight), "")
-                pageopen = True
-            y = float(pageheight)-float(y)
-            p.fit_pdi_page(page, 0, pageheight, "cloneboxes")
-            qcolors = len(colors)
-            qint = len(intensities)
-            retX = -1
-            retY = -1
-            if sideX == "i":
-                if place == "T" or place == "B":
-                    x = x-qcolors*qint*size
-                elif place == "R" or place == "L":
-                    x = x-size
-                retX = x
-            if sideY == "i":
-                if place == "T" or place == "B":
-                    y = y+size
-                elif place == "L" or place == "R":
-                    y = y+qcolors*qint*size
-                retY = y
-            for index, color in enumerate(colors, start=0):
-                for i in intensities:
-                    intense = int(i)/100
-                    ceros = ""
-                    for a in range(len(colors)):
-                        if (a == index):
-                            ceros = ceros + str(intense)+" "
-                        else:
-                            ceros = ceros + "0 "
-                    p.set_graphics_option(
-                        "fillcolor={ devicen " + str(devicen)+" " + ceros + "}")
-
-                    if place == "L" or place == "R":
-                        p.rect(x, y-size, size, size)
-                        y = y-size
-                    elif place == "T":
-                        p.rect(x, y-size, size, size)
-                        x = x+size
-                    else:
-                        p.rect(x, y-size, size, size)
-                        x = x+size
-                    p.fill()
-            if place == "L" or place == "R":
-                y = y+size
-            else:
-                x = x-size
-
-            if sideX == "f":
-                x = x+size
-                retX = x
-
-            if sideY == "f":
-                y = y-size
-                retY = y
-
-            p.close_pdi_page(page)
-
-            p.end_page_ext("")
-
-        p.close_pdi_document(indoc)
-
-        p.end_document("")
-        return (json.dumps({
-                "retX": retX,
-                "retY": float(pageheight)-retY,
-                }))
-    except PDFlibException as ex:
-        print("PDFlib exception occurred:")
-        print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))
-
-    except Exception as ex:
-        print(ex)
-
-    finally:
-        if p:
-            p.delete()
+    finalize_and_merge_multipage(pdffile, pages_overlays, outfile)
+    return json.dumps({'retX': ret_x, 'retY': ret_y})

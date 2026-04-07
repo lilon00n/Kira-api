@@ -1,158 +1,107 @@
-import os
-ENV = os.getenv("ENV")
-import sys
+﻿# -*- coding: utf-8 -*-
+"""
+info.py
+Places a text string at a position on the PDF page.
+Same place / sideX / sideY coordinate system as color_names.py.
+Returns JSON {"retX": x, "retY": y}.
+Migrated from PDFlib to reportlab + pypdf.
+"""
+
 import json
-from PDFlib.PDFlib import *
-from make_devicen import make_devicen
+import os
+from reportlab.pdfbase import pdfmetrics
+from color_utils import make_spot_colors, get_all_inks_color
+from pdf_utils import get_source_info, create_overlay_canvas, finalize_and_merge_multipage
+
+FONT_NAME = 'Helvetica'
 
 
 def make(searchpath, pdffile, outfile, colors, info, fsize, x, y, place, sideX, sideY):
-    paths = outfile.split("\\")
-    if len(paths) == 1:
-        paths = outfile.split("/")
-    title = paths[len(paths)-1]
     fsize = float(fsize)
     x = float(x)
     y = float(y)
-    p = None
 
-    try:
-        p = PDFlib()
+    page_width, page_height, num_pages = get_source_info(pdffile)
+    spot_colors = make_spot_colors(colors)
+    mark_color = get_all_inks_color(spot_colors)
 
-        p.set_option("searchpath={" + searchpath + "}")
-        if ENV == "development":
-            print("we are in development mode. do not worry about license")
-        elif ENV == "production":
-            p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
+    if place == 'L':
+        angle = 90
+    elif place == 'R':
+        angle = 270
+    else:
+        angle = 0
 
-        # This means we must check return values of load_font() etc.
-        p.set_option("errorpolicy=return")
-        # Open the input PDF */
-        indoc = p.open_pdi_document(pdffile, "")
-        if indoc == -1:
-            print("Error: " + p.get_errmsg())
-            next
+    total_w = pdfmetrics.stringWidth(info, FONT_NAME, fsize)
+    total_h = fsize * 1.2  # approximate line height
 
-        endpage = p.pcos_get_number(indoc, "length:pages")
-        pageopen = False
-        pagewidth = p.pcos_get_number(indoc, "pages[0]/width")
-        pageheight = p.pcos_get_number(indoc, "pages[0]/height")
-        if p.begin_document(outfile, "") == -1:
-            raise "Error: " + p.get_errmsg()
+    ret_x = -1
+    ret_y = -1
 
-        p.set_info("Creator", "Nala by Verdant Solution")
-        p.set_info("Title", title)
-        devicen = make_devicen(p, colors)
-        # Loop over all pages of the input document
-        for pageno in range(1, int(endpage)+1, 1):
-            page = p.open_pdi_page(indoc, pageno, "cloneboxes")
+    pages_overlays = []
+    for _ in range(num_pages):
+        c, buf = create_overlay_canvas(page_width, page_height)
+        c.setFont(FONT_NAME, fsize)
+        c.setFillColor(mark_color)
 
-            if page == -1:
-                print("Error: " + p.get_errmsg())
-                next
+        cur_x = x
+        cur_y = page_height - y
 
-            # Start a new page
-            if not pageopen:
-                p.begin_page_ext(float(pagewidth), float(pageheight), "")
-                pageopen = True
-            p.fit_pdi_page(page, 0, pageheight, "cloneboxes")
-            y = float(pageheight)-float(y)
-            if place == "L":
-                angle = 90
-            elif place == "R":
-                angle = 270
+        # Offset logic mirrors PDFlib info_textline placement
+        if sideX == 'i':
+            if place in ('T', 'B'):
+                cur_x = cur_x - total_w
+            elif place == 'R':
+                cur_x = cur_x - total_h
+            ret_x = cur_x
+        else:
+            if place == 'L':
+                cur_x = cur_x + total_h
+
+        if sideY == 'i':
+            if place == 'B':
+                cur_y = cur_y + total_h
+            elif place in ('R', 'L'):
+                cur_y = cur_y + total_w
+            ret_y = cur_y
+        else:
+            if place == 'T':
+                cur_y = cur_y - total_h
+
+        c.saveState()
+        if place == 'L':
+            c.translate(cur_x, cur_y - total_w)
+            c.rotate(angle)
+            c.drawString(0, 0, info)
+            if sideY != 'i':
+                cur_y = cur_y - total_w
+        elif place == 'R':
+            c.translate(cur_x, cur_y)
+            c.rotate(angle)
+            c.drawString(0, 0, info)
+            if sideY != 'i':
+                cur_y = cur_y - total_w
+        elif place == 'T':
+            c.drawString(cur_x, cur_y, info)
+            if sideX == 'i':
+                cur_x = cur_x - total_w
             else:
-                angle = 0
-
-            ones = ""
-            for a in range(len(colors)):
-                ones = ones + "1 "
-
-            optlist = "fontname=Helvetica fontsize=" + \
-                str(fsize) + " encoding=unicode rotate=" + \
-                str(angle) + " fillcolor={devicen " + \
-                str(devicen)+" " + ones + "}"
-            totalW = p.info_textline(info, "width", optlist)
-            totalH = p.info_textline(info, "height", optlist)
-            retX = -1
-            retY = -1
-            if sideX == "i":
-                if place == "T" or place == "B":
-                    x = x-totalW
-                elif place == "R":
-                    x = x-totalH
-
-                retX = x
+                cur_x = cur_x + total_w
+        else:  # B
+            c.drawString(cur_x, cur_y - total_h, info)
+            if sideX == 'i':
+                cur_x = cur_x - total_w
             else:
-                if place == "L":
-                    x = x+totalH
+                cur_x = cur_x + total_w
+        c.restoreState()
 
-            if sideY == "i":
-                if place == "B":
-                    y = y+totalH
-                elif place == "R":
-                    y = y+totalW
-                elif place == "L":
-                    y = y+totalW
-                retY = y
-            else:
-                if place == "T":
-                    y = y-totalH
+        if sideX == 'f':
+            ret_x = cur_x
+        if sideY == 'f':
+            ret_y = cur_y
 
-            if place == "L":
-                if sideY == "i":
-                    p.fit_textline(info, x, y-totalW, optlist)
-                else:
-                    p.fit_textline(info, x, y-totalW, optlist)
-                    y = y-totalW
-            elif place == "R":
-                if sideY == "i":
-                    p.fit_textline(info, x, y, optlist)
-                    y = y+totalW
-                else:
-                    p.fit_textline(info, x, y, optlist)
-                    y = y-totalW
-            elif place == "T":
-                if sideX == "i":
-                    p.fit_textline(info, x, y, optlist)
-                    x = x-totalW
-                else:
-                    p.fit_textline(info, x, y, optlist)
-                    x = x+totalW
-            else:
-                if sideX == "i":
-                    p.fit_textline(info, x, y-totalH, optlist)
-                    x = x-totalW
-                else:
-                    p.fit_textline(info, x, y-totalH, optlist)
-                    x = x+totalW
+        c.showPage()
+        pages_overlays.append((c, buf))
 
-            #p.fit_textline(info, x, y, optlist)
-            if sideX == "f":
-                retX = x
-
-            if sideY == "f":
-                retY = y
-
-            p.close_pdi_page(page)
-
-            p.end_page_ext("")
-
-        p.close_pdi_document(indoc)
-
-        p.end_document("")
-
-        return (json.dumps({
-                "retX": retX,
-                "retY": float(pageheight)-retY,
-                }))
-    except PDFlibException as ex:
-        print("PDFlib exception occurred:")
-        print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))
-
-    except Exception as ex:
-        print(ex)
-
-    finally:
-        if p:
-            p.delete()
+    finalize_and_merge_multipage(pdffile, pages_overlays, outfile)
+    return json.dumps({'retX': ret_x, 'retY': page_height - ret_y})

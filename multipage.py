@@ -1,91 +1,52 @@
+﻿# -*- coding: utf-8 -*-
+"""
+multipage.py
+Opens a source PDF, copies its first page, then appends one extra page per
+separation TIFF image with the image and a colour-name label.
+Migrated from PDFlib to reportlab + pypdf + Pillow.
+"""
+
+import io
 import os
-ENV = os.getenv("ENV")
-import sys
-import json
-from PDFlib.PDFlib import *
-from make_devicen import make_devicen
+from pypdf import PdfReader, PdfWriter
+from reportlab.pdfgen.canvas import Canvas
+from reportlab.lib.colors import black
 
 
 def make(searchpath, pdffile, outfile, separationsFolder, pathImages, names):
-    paths = outfile.split("\\")
-    if len(paths) == 1:
-        paths = outfile.split("/")
-    p = None
+    source = PdfReader(pdffile)
+    page_width  = float(source.pages[0].mediabox.width)
+    page_height = float(source.pages[0].mediabox.height)
 
-    try:
-        p = PDFlib()
+    writer = PdfWriter()
 
-        p.set_option("searchpath={" + searchpath + "}")
-        if ENV == "development":
-            print("we are in development mode. do not worry about license")
-        elif ENV == "production":
-            p.set_option("license=w900202-010598-802290-LJJBF2-BEC8G2")
+    # Copy first page of source as-is
+    writer.add_page(source.pages[0])
 
-        # This means we must check return values of load_font() etc.
-        # This means we must check return values of load_font() etc.
-        p.set_option("errorpolicy=return")
-        print(pdffile)
-        # Open the input PDF */
-        indoc = p.open_pdi_document(pdffile, "")
-        if indoc == -1:
-            print("Error: " + p.get_errmsg())
-            next
+    # One page per separation TIFF
+    for index, image_name in enumerate(pathImages):
+        img_path = separationsFolder + image_name
+        sep_height = page_height + 10  # extra 10 pt for the label row at bottom
 
-        pagewidth = p.pcos_get_number(indoc, "pages[0]/width")
-        pageheight = p.pcos_get_number(indoc, "pages[0]/height")
+        buf = io.BytesIO()
+        c = Canvas(buf, pagesize=(page_width, sep_height))
 
-        endpage = p.pcos_get_number(indoc, "length:pages")
-        pageopen = False
-        if p.begin_document(outfile, "") == -1:
-            raise "Error: " + p.get_errmsg()
+        # Draw the TIFF image (Pillow handles reading via ReportLab's drawImage)
+        c.drawImage(img_path, 0, 10, width=page_width, height=page_height,
+                    preserveAspectRatio=True)
 
-        p.set_info("Creator", "Nala by Verdant Solution")
-        page = p.open_pdi_page(indoc, 1, "cloneboxes")
-        if page == -1:
-            print("Error: " + p.get_errmsg())
-            next
+        # Colour name label at the very bottom
+        c.setFont('Helvetica', 10)
+        c.setFillColor(black)
+        c.drawString(0, 0, names[index])
 
-        # Start a new page
-        if not pageopen:
-            p.begin_page_ext(float(pagewidth), float(pageheight), "")
-            pageopen = True
+        c.showPage()
+        c.save()
+        buf.seek(0)
 
-        p.fit_pdi_page(page, 0, pageheight, "cloneboxes")
+        sep_reader = PdfReader(buf)
+        writer.add_page(sep_reader.pages[0])
+        print(image_name)
 
-        p.close_pdi_page(page)
-
-        p.end_page_ext("")
-        print(separationsFolder)
-        # Loop over all pages of the input document
-        # for image in pathImages:
-        for index, image in enumerate(pathImages, start=0):
-            tif = p.load_image("tiff", separationsFolder+image, "page=1")
-            if tif == -1:
-                print("Error: " + p.get_errmsg())
-                next
-
-            # Start a new page
-            p.begin_page_ext(float(pagewidth), float(pageheight)+10, "")
-            p.fit_image(tif, 0.0, 10, "adjustpage")
-            p.close_image(tif)
-            optlist = "fontname=Helvetica fontsize=10 encoding=unicode  fillcolor={ Black }"
-
-            textline = names[index]
-            p.fit_textline(textline, 0, 0, optlist)
-            p.end_page_ext("")
-            print(image)
-
-        p.close_pdi_document(indoc)
-
-        p.end_document("")
-
-    except PDFlibException as ex:
-        print("PDFlib exception occurred:")
-        print("[%d] %s: %s" % (ex.errnum, ex.apiname, ex.errmsg))
-
-    except Exception as ex:
-        print(ex)
-
-    finally:
-        if p:
-            p.delete()
+    with open(outfile, 'wb') as f:
+        writer.write(f)
