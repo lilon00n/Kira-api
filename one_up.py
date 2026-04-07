@@ -411,20 +411,12 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     # The MediaBox covers the full extent: lower-left = (artwork_left, -(label_h+margin))
     # The artwork is placed at its original position — no cm transform injected.
 
-    src_page = src_reader.pages[0]
-    # Original source coordinates: artwork occupies (0,0)→(src_w, src_h)
-    # We need to shift the left edge when label_w > src_w
-    art_x0 = add_info   # horizontal offset of artwork within ET (may be 0)
-    art_y0 = 0          # artwork bottom stays at Y=0 in content-stream space
-
-    # MediaBox in content-stream space:
-    #   left:   art_x0 - MEDIA_EXCESS - CROP_EXCESS
-    #   right:  art_x0 + src_w + MEDIA_EXCESS + CROP_EXCESS   (or label_w edge)
-    #   bottom: -(label_h + CROP_EXCESS + MEDIA_EXCESS)
-    #   top:    src_h + MEDIA_EXCESS + CROP_EXCESS
-    mb_left   = art_x0 - (MEDIA_EXCESS + CROP_EXCESS)
+    # Key invariant: artwork native (0,0) must appear at canvas position
+    # (offset_x, offset_y) so all drawing helpers work unchanged.
+    # canvas_x = page_x - mb_left  →  0 - mb_left = offset_x  →  mb_left = -offset_x
+    mb_left   = -offset_x
     mb_right  = mb_left + media_w
-    mb_bottom = -(label_h + CROP_EXCESS + MEDIA_EXCESS)
+    mb_bottom = -offset_y
     mb_top    = src_h + CROP_EXCESS + MEDIA_EXCESS
 
     # Append the source page verbatim — content stream untouched
@@ -439,36 +431,16 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
         if _bk in main_page:
             del main_page[_bk]
 
-    # Recalculate drawing offsets for all label elements:
-    # In ET-sheet space (origin = mb_left, mb_bottom), coordinates are:
-    #   artwork_bottom_left = (art_x0 - mb_left, 0 - mb_bottom)
-    # For drawing functions that use bottom-left = (0,0) convention:
-    #   x_draw_offset = art_x0 - mb_left = MEDIA_EXCESS + CROP_EXCESS
-    #   y_draw_offset = -mb_bottom = label_h + CROP_EXCESS + MEDIA_EXCESS
-    #
-    # The ReportLab canvas is drawn in absolute content-stream space,
-    # but the canvas pagesize covers the MediaBox extent starting from (0,0).
-    # We set the canvas origin at (mb_left, mb_bottom) by using a full-size
-    # canvas and offsetting all drawing operations by (-mb_left, -mb_bottom).
-
-    # Canvas pagesize = MediaBox size (but canvas origin is (0,0), not mb coords)
-    canvas_w = float(mb_right - mb_left)
+    # Canvas pagesize covers the full ET MediaBox extent
+    canvas_w = float(mb_right - mb_left)   # = media_w
     canvas_h = float(mb_top   - mb_bottom)
-    # Shift to convert from MB-relative coords to canvas coords:
-    cx_off = -mb_left    # add to any mb_x to get canvas_x
-    cy_off = -mb_bottom  # add to any mb_y to get canvas_y
-
-    # In the canvas, artwork sits at:
-    #   canvas_x = art_x0 + cx_off = art_x0 - mb_left = MEDIA_EXCESS + CROP_EXCESS
-    #   canvas_y = 0      + cy_off = -mb_bottom = label_h + CROP_EXCESS + MEDIA_EXCESS
-    art_canvas_x = art_x0 + cx_off
-    art_canvas_y = 0      + cy_off   # = label_h + CROP_EXCESS + MEDIA_EXCESS
 
     # ---- Draw the label overlay with ReportLab ----
-    # The ReportLab canvas uses (0,0) at the bottom-left of the canvas page.
-    # canvas_w == media_w and canvas_h == media_h so all existing drawing
-    # helper coordinate formulas remain valid: "MEDIA_EXCESS + label_h + CROP_EXCESS"
-    # in canvas space equals art_canvas_y, matching the artwork's original bottom edge.
+    # All drawing helper coordinates use the old ET-canvas convention:
+    #   y = MEDIA_EXCESS..MEDIA_EXCESS+label_h  → label band
+    #   y = MEDIA_EXCESS+label_h+CROP_EXCESS    → artwork trim bottom
+    # When merged with translate(mb_left, mb_bottom), these canvas coords map
+    # to the correct page positions relative to the artwork at native (0,0).
     label_buf = io.BytesIO()
     c = Canvas(label_buf, pagesize=(canvas_w, canvas_h))
     c.setFont(FONT_NAME, FONT_SIZE)
@@ -552,12 +524,10 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     # Strip Nala logo spot colors from parent page resources
     _strip_foreign_colorspaces(main_page, [col['name'] for col in colorsJson])
 
-    # TrimBox = artwork area on the ET sheet (artwork at Y=0 in page coords)
-    art_mb_x0 = float(art_x0)
-    art_mb_y0 = 0.0
-    art_mb_x1 = float(art_x0 + src_w)
-    art_mb_y1 = float(src_h)
-    main_page.trimbox = RectangleObject((art_mb_x0, art_mb_y0, art_mb_x1, art_mb_y1))
+    # TrimBox = artwork trim area in native page coords
+    # (artwork is at 0,0; desp_x/y are negative, so -desp is TrimBox inset)
+    main_page.trimbox = RectangleObject((-desp_x, -desp_y,
+                                         -desp_x + trim_w, -desp_y + trim_h))
 
     # CropBox = full ET sheet so Artpro uses the entire spread (label + artwork + marks)
     from pypdf.generic import NameObject
