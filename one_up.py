@@ -392,35 +392,90 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     # ---- Build the output PDF ----
     writer = PdfWriter()
 
-    # Append the source page so pypdf properly resolves all indirect object
-    # references, then translate all artwork to its position on the ET sheet
-    # and expand the page to the full ET dimensions.
+    # Strategy for Artpro compatibility:
+    # Artpro+ requires artwork to remain as NATIVE PAGE CONTENT at its original
+    # coordinates. Any wrapping in Form XObjects (what merge_transformed_page and
+    # even add_transformation can cause indirectly) makes Artpro show a blank page.
     #
-    # CRITICAL for Artpro compatibility: add_transformation() injects a
-    # coordinate-system transform directly into the page content stream.
-    # The artwork stays as native page content — NOT wrapped in a Form XObject
-    # as merge_transformed_page() would do. Artpro+ (and most prepress RIPs)
-    # will not display content that lives inside a Form XObject.
+    # Instead of moving the artwork, we EXPAND THE PAGE in the negative Y direction
+    # so the label band sits below the artwork in page-coordinate space.
+    # The MediaBox lower-left is shifted to (−margin−label, 0) and the artwork
+    # content stream is left completely untouched.
+    #
+    # Layout:
+    #   Y = src_h + margin_top         ← top edge of ET sheet
+    #   Y = src_h                      ← top of source artwork (original coords)
+    #   Y = 0                          ← bottom of source artwork (original coords, unchanged)
+    #   Y = -label_h - margin_bottom   ← bottom of label band
+    #
+    # The MediaBox covers the full extent: lower-left = (artwork_left, -(label_h+margin))
+    # The artwork is placed at its original position — no cm transform injected.
+
+    src_page = src_reader.pages[0]
+    # Original source coordinates: artwork occupies (0,0)→(src_w, src_h)
+    # We need to shift the left edge when label_w > src_w
+    art_x0 = add_info   # horizontal offset of artwork within ET (may be 0)
+    art_y0 = 0          # artwork bottom stays at Y=0 in content-stream space
+
+    # MediaBox in content-stream space:
+    #   left:   art_x0 - MEDIA_EXCESS - CROP_EXCESS
+    #   right:  art_x0 + src_w + MEDIA_EXCESS + CROP_EXCESS   (or label_w edge)
+    #   bottom: -(label_h + CROP_EXCESS + MEDIA_EXCESS)
+    #   top:    src_h + MEDIA_EXCESS + CROP_EXCESS
+    mb_left   = art_x0 - (MEDIA_EXCESS + CROP_EXCESS)
+    mb_right  = mb_left + media_w
+    mb_bottom = -(label_h + CROP_EXCESS + MEDIA_EXCESS)
+    mb_top    = src_h + CROP_EXCESS + MEDIA_EXCESS
+
+    # Append the source page verbatim — content stream untouched
     writer.append(src_reader, pages=[0])
     main_page = writer.pages[0]
-    main_page.add_transformation(
-        Transformation().translate(tx=offset_x, ty=offset_y)
-    )
-    main_page.mediabox = RectangleObject((0.0, 0.0, float(media_w), float(media_h)))
-    # Remove source-page box overrides — ET sheet boxes take precedence
-    for _bk in ('/BleedBox', '/CropBox', '/ArtBox'):
+
+    # Expand the MediaBox to cover the full ET sheet; artwork content stays at Y=0
+    main_page.mediabox = RectangleObject((float(mb_left), float(mb_bottom),
+                                          float(mb_right), float(mb_top)))
+    # Remove box overrides from the source page that would restrict the visible area
+    for _bk in ('/BleedBox', '/CropBox', '/ArtBox', '/TrimBox'):
         if _bk in main_page:
             del main_page[_bk]
 
+    # Recalculate drawing offsets for all label elements:
+    # In ET-sheet space (origin = mb_left, mb_bottom), coordinates are:
+    #   artwork_bottom_left = (art_x0 - mb_left, 0 - mb_bottom)
+    # For drawing functions that use bottom-left = (0,0) convention:
+    #   x_draw_offset = art_x0 - mb_left = MEDIA_EXCESS + CROP_EXCESS
+    #   y_draw_offset = -mb_bottom = label_h + CROP_EXCESS + MEDIA_EXCESS
+    #
+    # The ReportLab canvas is drawn in absolute content-stream space,
+    # but the canvas pagesize covers the MediaBox extent starting from (0,0).
+    # We set the canvas origin at (mb_left, mb_bottom) by using a full-size
+    # canvas and offsetting all drawing operations by (-mb_left, -mb_bottom).
+
+    # Canvas pagesize = MediaBox size (but canvas origin is (0,0), not mb coords)
+    canvas_w = float(mb_right - mb_left)
+    canvas_h = float(mb_top   - mb_bottom)
+    # Shift to convert from MB-relative coords to canvas coords:
+    cx_off = -mb_left    # add to any mb_x to get canvas_x
+    cy_off = -mb_bottom  # add to any mb_y to get canvas_y
+
+    # In the canvas, artwork sits at:
+    #   canvas_x = art_x0 + cx_off = art_x0 - mb_left = MEDIA_EXCESS + CROP_EXCESS
+    #   canvas_y = 0      + cy_off = -mb_bottom = label_h + CROP_EXCESS + MEDIA_EXCESS
+    art_canvas_x = art_x0 + cx_off
+    art_canvas_y = 0      + cy_off   # = label_h + CROP_EXCESS + MEDIA_EXCESS
+
     # ---- Draw the label overlay with ReportLab ----
+    # The ReportLab canvas uses (0,0) at the bottom-left of the canvas page.
+    # canvas_w == media_w and canvas_h == media_h so all existing drawing
+    # helper coordinate formulas remain valid: "MEDIA_EXCESS + label_h + CROP_EXCESS"
+    # in canvas space equals art_canvas_y, matching the artwork's original bottom edge.
     label_buf = io.BytesIO()
-    c = Canvas(label_buf, pagesize=(media_w, media_h))
+    c = Canvas(label_buf, pagesize=(canvas_w, canvas_h))
     c.setFont(FONT_NAME, FONT_SIZE)
 
-    # Nala logo (PDF placed as image via pypdf later — here we draw a placeholder rect)
-    nala_x   = MEDIA_EXCESS + CROP_EXCESS
-    nala_y   = MEDIA_EXCESS + label_h - nala_h
-    # Embed Nala PDF page as image overlay (separate merge step below)
+    # Nala logo position (canvas coords = same as old ET sheet coords)
+    nala_x = MEDIA_EXCESS + CROP_EXCESS
+    nala_y = MEDIA_EXCESS + label_h - nala_h
 
     # Client logo image
     logo_x = MEDIA_EXCESS + CROP_EXCESS
@@ -432,7 +487,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
         except Exception:
             pass
 
-    # Crop marks (black, will overprint in prepress workflow)
+    # Crop marks
     crop_m_y = MEDIA_EXCESS + label_h + CROP_EXCESS + trim_h
     _draw_crop_marks(
         c,
@@ -468,12 +523,14 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     c.showPage()
     c.save()
 
-    # Merge label overlay onto the main page
+    # Merge label overlay onto the main page.
+    # The label canvas covers the full ET MediaBox (canvas_w × canvas_h).
+    # merge_page() overlays it without wrapping artwork in a Form XObject.
     label_buf.seek(0)
     label_reader = PdfReader(label_buf)
     main_page.merge_page(label_reader.pages[0])
 
-    # Merge the Nala logo (from the nala-rotulo PDF) at top-left of label area
+    # Merge the Nala logo PDF at the correct canvas position
     nala_reader2  = PdfReader(nala_pdf_path)
     nala_src_page = nala_reader2.pages[0]
     scale = 0.6
@@ -483,14 +540,15 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
             tx=nala_x, ty=nala_y,
         ),
     )
-    # The Nala logo PDF carries its own spot colors; strip them from the main
-    # page resources — the Form XObjects inside are self-contained and still
-    # render correctly. Only the job's inks should appear in separations.
-    _strip_foreign_colorspaces(main_page, [c['name'] for c in colorsJson])
+    # Strip Nala logo spot colors from parent page resources
+    _strip_foreign_colorspaces(main_page, [col['name'] for col in colorsJson])
 
-    # Set TrimBox = full sheet so Artpro and similar prepress tools display
-    # the entire ET (label band + artwork + marks) rather than a blank page.
-    main_page.trimbox = RectangleObject((0.0, 0.0, float(media_w), float(media_h)))
+    # TrimBox = artwork area on the ET sheet (in MediaBox coords; artwork at Y=0)
+    art_mb_x0 = float(art_x0)
+    art_mb_y0 = 0.0
+    art_mb_x1 = float(art_x0 + src_w)
+    art_mb_y1 = float(src_h)
+    main_page.trimbox = RectangleObject((art_mb_x0, art_mb_y0, art_mb_x1, art_mb_y1))
 
     # ---- Separation pages ----
     for index, image_name in enumerate(path_images):
