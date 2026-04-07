@@ -390,92 +390,56 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     offset_y = MEDIA_EXCESS + label_h + CROP_EXCESS + desp_y
 
     # ---- Build the output PDF ----
-    # Strategy: wrap the source AI page in a /Form XObject and position it using
-    # the XObject's own /Matrix (translation encoded in the Form XObject itself).
-    # The container page content stream contains only "/ArtFm Do" — no cm operator.
-    # This matches how PDFlib's fit_pdi_page() works and avoids q/cm/Q wrappers
-    # that Artpro+ cannot process.
-    import re
-    from pypdf.generic import (
-        DecodedStreamObject, NameObject, ArrayObject,
-        DictionaryObject, FloatObject, NumberObject,
-    )
+    # Strategy: keep artwork INLINE in the page content stream (no Form XObject).
+    # All spot colors (CS0..CS4), ExtGState, and nested XObjects (Fm0..Fm117)
+    # stay at page level — exactly like marcas.pdf — so Artpro+ can enumerate
+    # separations correctly.  Artwork is positioned via a q/cm/Q block.
+    from pypdf.generic import DecodedStreamObject, NameObject, ArrayObject
 
     writer = PdfWriter()
     writer.append(src_reader, pages=[0])
     main_page = writer.pages[0]
 
-    # Copy OC properties from source to writer catalog so Artpro+ knows
-    # which Optional Content Groups (layers) exist and are visible by default.
-    _src_cat = src_reader.trailer['/Root'].get_object()
-    if '/OCProperties' in _src_cat:
-        writer._root_object[NameObject('/OCProperties')] = _src_cat['/OCProperties'].clone(writer)
+    # Record ALL spot-channel names from the source AI colorspaces so they are
+    # protected from _strip_foreign_colorspaces later.  This preserves CS0=/die
+    # and any other non-job channels that the AI content stream references.
+    _src_cs_dict = (
+        main_page[NameObject('/Resources')]
+        .get_object()
+        .get('/ColorSpace', {})
+        .get_object()
+    )
+    _src_spot_names = set()
+    for _cs_val in _src_cs_dict.values():
+        try:
+            _cs_arr = _cs_val.get_object()
+            if hasattr(_cs_arr, '__getitem__') and len(_cs_arr) >= 2:
+                if str(_cs_arr[0]) == '/Separation':
+                    _src_spot_names.add(str(_cs_arr[1]).lstrip('/'))
+        except Exception:
+            pass
 
-    # Capture cloned source resources and Group (already in writer's object space)
-    _src_resources = main_page[NameObject('/Resources')].get_object()
-    _src_group_entry = main_page.get(NameObject('/Group'))
-    _src_group = _src_group_entry.get_object() if _src_group_entry is not None else None
+    # Positive ET-sheet MediaBox
+    main_page.mediabox = RectangleObject((0.0, 0.0, float(media_w), float(media_h)))
+    for _bk in ('/BleedBox', '/CropBox', '/ArtBox', '/TrimBox'):
+        if _bk in main_page:
+            del main_page[_bk]
 
-    # Extract raw artwork bytes from the cloned content stream(s).
-    # Use b'\n' join to avoid token-boundary issues when concatenating streams.
+    # Extract raw content bytes from the cloned source AI streams
     _contents_obj = main_page[NameObject('/Contents')].get_object()
     if isinstance(_contents_obj, ArrayObject):
         _raw_art = b'\n'.join(ref.get_object().get_data() for ref in _contents_obj)
     else:
         _raw_art = _contents_obj.get_data()
 
-    # Strip Optional Content Group (layer) markers from the artwork stream.
-    # Inside a Form XObject, Artpro+ may default OC groups to invisible when
-    # /OCProperties is not in the catalog; stripping makes content unconditional.
-    # BDC/EMC are purely informational markers — they do not affect graphics state.
-    _raw_art = re.sub(rb'/OC\s+/\w+\s+BDC\s*', b'', _raw_art)
-    _raw_art = re.sub(rb'\bEMC\b\s*', b'', _raw_art)
-
-    # Build the /Form XObject.  The /Matrix encodes the (offset_x, offset_y)
-    # translation so the page content stream needs no cm operator at all.
-    # Use FlateDecode compression — Artpro+ requires properly encoded streams.
-    _xobj = DecodedStreamObject()
-    _xobj[NameObject('/Type')] = NameObject('/XObject')
-    _xobj[NameObject('/Subtype')] = NameObject('/Form')
-    _xobj[NameObject('/FormType')] = NumberObject(1)
-    _xobj[NameObject('/BBox')] = ArrayObject([
-        FloatObject(0), FloatObject(0), FloatObject(src_w), FloatObject(src_h),
-    ])
-    _xobj[NameObject('/Matrix')] = ArrayObject([
-        FloatObject(1), FloatObject(0), FloatObject(0), FloatObject(1),
-        FloatObject(offset_x), FloatObject(offset_y),
-    ])
-    _xobj[NameObject('/Resources')] = _src_resources
-    if _src_group is not None:
-        _xobj[NameObject('/Group')] = _src_group
-    _xobj.set_data(_raw_art)
-    # Compress the stream — FlateDecode is required for Artpro+ compatibility
-    _xobj = _xobj.flate_encode()
-    _xobj_ref = writer._add_object(_xobj)
-
-    # Resize main_page to the full ET sheet
-    main_page.mediabox = RectangleObject((0.0, 0.0, float(media_w), float(media_h)))
-    for _bk in ('/BleedBox', '/CropBox', '/ArtBox', '/TrimBox'):
-        if _bk in main_page:
-            del main_page[_bk]
-
-    # Replace main_page resources with a minimal dict referencing only /ArtFm.
-    # merge_page / merge_transformed_page calls below will extend this dict.
-    _page_xobj_dict = DictionaryObject()
-    _page_xobj_dict[NameObject('/ArtFm')] = _xobj_ref
-    _page_resources = DictionaryObject()
-    _page_resources[NameObject('/XObject')] = _page_xobj_dict
-    main_page[NameObject('/Resources')] = _page_resources
-
-    # Propagate page-level Group for transparency context
-    if _src_group is not None:
-        main_page[NameObject('/Group')] = _src_group
-
-    # Content stream: plain /ArtFm Do — NO cm, translation is in the XObject /Matrix
-    _place_stream = DecodedStreamObject()
-    _place_stream.set_data(b'q\n/ArtFm Do\nQ\n')
-    _place_ref = writer._add_object(_place_stream)
-    main_page[NameObject('/Contents')] = _place_ref
+    # Wrap artwork in q/cm/Q so it renders at (offset_x, offset_y) on the ET sheet.
+    # Resources (CS0..CS4, Fm0..Fm117, etc.) stay at page level — Artpro+ requires this.
+    _header = f'q\n1 0 0 1 {offset_x:.6f} {offset_y:.6f} cm\n'.encode()
+    _wrapped = _header + _raw_art + b'\nQ\n'
+    _new_stream = DecodedStreamObject()
+    _new_stream.set_data(_wrapped)
+    _new_ref = writer._add_object(_new_stream)
+    main_page[NameObject('/Contents')] = _new_ref
 
     canvas_w = float(media_w)
     canvas_h = float(media_h)
@@ -538,7 +502,11 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
         nala_reader2.pages[0],
         Transformation().scale(scale, scale).translate(tx=nala_x, ty=nala_y),
     )
-    _strip_foreign_colorspaces(main_page, [col['name'] for col in colorsJson])
+    # Strip foreign colorspaces (from Nala logo / label) but protect all
+    # spot channels from the source AI (e.g. /die = CS0) which are referenced
+    # in the artwork content stream and must stay in page resources.
+    _job_and_src_spots = [col['name'] for col in colorsJson] + list(_src_spot_names)
+    _strip_foreign_colorspaces(main_page, _job_and_src_spots)
 
     # TrimBox in ET-sheet space: artwork trim corners at (offset_x-desp_x, offset_y-desp_y)
     _tb_x0 = offset_x - desp_x
