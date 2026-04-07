@@ -524,11 +524,16 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     c.save()
 
     # Merge label overlay onto the main page.
-    # The label canvas covers the full ET MediaBox (canvas_w × canvas_h).
-    # merge_page() overlays it without wrapping artwork in a Form XObject.
+    # The label canvas uses coordinates where y=0 is canvas bottom = ET sheet bottom.
+    # The main page has artwork at y=0 (artwork origin), with label band at y<0.
+    # We translate the canvas by (mb_left, mb_bottom) so canvas y=MEDIA_EXCESS maps
+    # to page y = mb_bottom + MEDIA_EXCESS = -CROP_EXCESS - label_h (label band area).
     label_buf.seek(0)
     label_reader = PdfReader(label_buf)
-    main_page.merge_page(label_reader.pages[0])
+    main_page.merge_transformed_page(
+        label_reader.pages[0],
+        Transformation().translate(tx=float(mb_left), ty=float(mb_bottom)),
+    )
 
     # Merge the Nala logo PDF at the correct canvas position
     nala_reader2  = PdfReader(nala_pdf_path)
