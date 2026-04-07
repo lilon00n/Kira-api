@@ -390,13 +390,14 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     offset_y = MEDIA_EXCESS + label_h + CROP_EXCESS + desp_y
 
     # ---- Build the output PDF ----
-    # Strategy: wrap the source AI page in a /Form XObject and place it on the
-    # ET sheet via a cm + /ArtFm Do invocation.  This mirrors what PDFlib's
-    # fit_pdi_page() produces and is known to work in Artpro+.
-    # All artwork resources (spot colors, nested XObjects, ExtGState) live inside
-    # the Form XObject; the container page carries only the label/Nala resources.
+    # Strategy: wrap the source AI page in a /Form XObject and position it using
+    # the XObject's own /Matrix (translation encoded in the Form XObject itself).
+    # The container page content stream contains only "/ArtFm Do" — no cm operator.
+    # This matches how PDFlib's fit_pdi_page() works and avoids q/cm/Q wrappers
+    # that Artpro+ cannot process.
     from pypdf.generic import (
-        DecodedStreamObject, NameObject, ArrayObject, DictionaryObject, FloatObject,
+        DecodedStreamObject, NameObject, ArrayObject, DictionaryObject,
+        FloatObject, NumberObject,
     )
 
     writer = PdfWriter()
@@ -415,12 +416,18 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     else:
         _raw_art = _contents_obj.get_data()
 
-    # Build the /Form XObject that wraps the source artwork
+    # Build the /Form XObject.  The /Matrix encodes the (offset_x, offset_y)
+    # translation so the page content stream needs no cm operator at all.
     _xobj = DecodedStreamObject()
     _xobj[NameObject('/Type')] = NameObject('/XObject')
     _xobj[NameObject('/Subtype')] = NameObject('/Form')
+    _xobj[NameObject('/FormType')] = NumberObject(1)
     _xobj[NameObject('/BBox')] = ArrayObject([
         FloatObject(0), FloatObject(0), FloatObject(src_w), FloatObject(src_h),
+    ])
+    _xobj[NameObject('/Matrix')] = ArrayObject([
+        FloatObject(1), FloatObject(0), FloatObject(0), FloatObject(1),
+        FloatObject(offset_x), FloatObject(offset_y),
     ])
     _xobj[NameObject('/Resources')] = _src_resources
     if _src_group is not None:
@@ -446,12 +453,9 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     if _src_group is not None:
         main_page[NameObject('/Group')] = _src_group
 
-    # Content stream: place the artwork Form XObject at (offset_x, offset_y)
-    _place_bytes = (
-        f'q\n1 0 0 1 {offset_x:.6f} {offset_y:.6f} cm\n/ArtFm Do\nQ\n'
-    ).encode()
+    # Content stream: plain /ArtFm Do — NO cm, translation is in the XObject /Matrix
     _place_stream = DecodedStreamObject()
-    _place_stream.set_data(_place_bytes)
+    _place_stream.set_data(b'q\n/ArtFm Do\nQ\n')
     _place_ref = writer._add_object(_place_stream)
     main_page[NameObject('/Contents')] = _place_ref
 
