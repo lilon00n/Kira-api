@@ -17,7 +17,9 @@ import os
 
 from pypdf import PdfReader, PdfWriter, Transformation
 from pypdf.generic import RectangleObject
-from reportlab.lib.colors import black, white, CMYKColor, CMYKColorSep
+from reportlab.lib.colors import white, CMYKColor, CMYKColorSep
+black        = CMYKColor(0, 0, 0, 1)          # 100 % K — never RGB, never process build
+registration = CMYKColorSep(1, 1, 1, 1, spotName='All', density=1.0)  # /Separation /All — prints on every separation
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen.canvas import Canvas
 
@@ -131,7 +133,7 @@ def _get_label_width(colors, info, logo_w):
 
 def _draw_crop_marks(c, x_margin, y_margin, size, weight, dh, dw, w, h):
     """Draw 4 L-shaped crop-mark corners."""
-    c.setStrokeColor(black)
+    c.setStrokeColor(registration)
     c.setLineWidth(weight)
     top    = y_margin
     bottom = y_margin - h
@@ -153,8 +155,8 @@ def _draw_crop_marks(c, x_margin, y_margin, size, weight, dh, dw, w, h):
 
 def _draw_one_reg_mark(c, cx, cy, radius):
     """Cross + concentric circles registration mark."""
-    c.setStrokeColor(black)
-    c.setFillColor(black)
+    c.setStrokeColor(registration)
+    c.setFillColor(registration)
     c.setLineWidth(0.5)
     c.line(cx - radius, cy, cx + radius, cy)
     c.line(cx, cy - radius, cx, cy + radius)
@@ -163,7 +165,7 @@ def _draw_one_reg_mark(c, cx, cy, radius):
     c.setLineWidth(0.5)
     c.line(cx - radius / 3, cy, cx + radius / 3, cy)
     c.line(cx, cy - radius / 3, cx, cy + radius / 3)
-    c.setStrokeColor(black)
+    c.setStrokeColor(registration)
     c.circle(cx, cy, 2 * radius / 3, stroke=1, fill=0)
 
 
@@ -195,7 +197,7 @@ def _draw_cotas(c, label_height, boxes, add_info):
     # ---- Horizontal cota (above trim) ----
     start_x = MEDIA_EXCESS + CROP_EXCESS + add_info
     start_y = MEDIA_EXCESS + label_height + CROP_EXCESS + trim_h + COTA_SEP
-    c.setStrokeColor(black)
+    c.setStrokeColor(registration)
     c.setLineWidth(0.5)
     c.line(start_x, start_y, start_x + trim_w, start_y)
     # White background behind text
@@ -207,6 +209,7 @@ def _draw_cotas(c, label_height, boxes, add_info):
 
     # ---- Vertical cota (left of trim) ----
     lx = MEDIA_EXCESS + CROP_EXCESS + add_info - COTA_SEP
+    c.setStrokeColor(registration)
     c.line(lx, MEDIA_EXCESS + label_height + CROP_EXCESS,
            lx, MEDIA_EXCESS + label_height + CROP_EXCESS + trim_h)
     c.setFillColor(white)
@@ -401,9 +404,8 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     writer.append(src_reader, pages=[0])
     main_page = writer.pages[0]
 
-    # Record ALL spot-channel names from the source AI colorspaces so they are
-    # protected from _strip_foreign_colorspaces later.  This preserves CS0=/die
-    # and any other non-job channels that the AI content stream references.
+    # Record ALL spot-channel names from the source AI colorspaces.
+    # Used for diagnostics / future reference; no stripping is performed.
     _src_cs_dict = (
         main_page[NameObject('/Resources')]
         .get_object()
@@ -500,23 +502,73 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     c.showPage()
     c.save()
 
-    # Merge label inline — merge_page() is inline (no Form XObject), compatible with Artpro
+    from pypdf.generic import DictionaryObject, FloatObject, NumberObject
+
+    # Label: merge inline — pypdf preserves original_bytes for NameObjects, so
+    # the #20-encoded PANTONE names in the written file are consistent between
+    # resources and content.  No Form XObject needed (and clone() of ReportLab
+    # font streams is buggy in pypdf — produces direct objects without indirect_reference).
     label_buf.seek(0)
     label_reader = PdfReader(label_buf)
     main_page.merge_page(label_reader.pages[0])
 
-    # Nala logo at standard ET coords
-    nala_reader2  = PdfReader(nala_pdf_path)
+    # Nala logo: Form XObject — keeps its PANTONE 7711 C / 225 C etc. self-contained
+    # at the XObject level.  We build the dict manually with primitives (no clone())
+    # to avoid the indirect_reference bug.
     scale = 0.6
-    main_page.merge_transformed_page(
-        nala_reader2.pages[0],
-        Transformation().scale(scale, scale).translate(tx=nala_x, ty=nala_y),
-    )
-    # Strip foreign colorspaces (from Nala logo / label) but protect all
-    # spot channels from the source AI (e.g. /die = CS0) which are referenced
-    # in the artwork content stream and must stay in page resources.
-    _job_and_src_spots = [col['name'] for col in colorsJson] + list(_src_spot_names)
-    _strip_foreign_colorspaces(main_page, _job_and_src_spots)
+    nala_reader2 = PdfReader(nala_pdf_path)
+    nala_page = nala_reader2.pages[0]
+    _nala_pw = float(nala_page.mediabox.width)
+    _nala_ph = float(nala_page.mediabox.height)
+
+    _nala_cont = nala_page[NameObject('/Contents')].get_object()
+    if isinstance(_nala_cont, ArrayObject):
+        _raw_nala = b'\n'.join(ref.get_object().get_data() for ref in _nala_cont)
+    else:
+        _raw_nala = _nala_cont.get_data()
+    # Strip OC markers from Nala logo (fixes "marked content deleted" preflight error)
+    _raw_nala = re.sub(rb'/OC\s+/\w+\s+BDC\s*', b'', _raw_nala)
+    _raw_nala = re.sub(rb'\bEMC\b\s*', b'', _raw_nala)
+
+    _nala_xobj = DecodedStreamObject()
+    _nala_xobj[NameObject('/Type')] = NameObject('/XObject')
+    _nala_xobj[NameObject('/Subtype')] = NameObject('/Form')
+    _nala_xobj[NameObject('/FormType')] = NumberObject(1)
+    _nala_xobj[NameObject('/BBox')] = ArrayObject([
+        FloatObject(0), FloatObject(0), FloatObject(_nala_pw), FloatObject(_nala_ph),
+    ])
+    # Matrix = [scale 0 0 scale tx ty] — combines scale and translation
+    _nala_xobj[NameObject('/Matrix')] = ArrayObject([
+        FloatObject(scale), FloatObject(0), FloatObject(0), FloatObject(scale),
+        FloatObject(nala_x), FloatObject(nala_y),
+    ])
+    _nala_res_entry = nala_page.get(NameObject('/Resources'))
+    if _nala_res_entry is not None:
+        _nala_xobj[NameObject('/Resources')] = _nala_res_entry.clone(writer)
+    _nala_grp_entry = nala_page.get(NameObject('/Group'))
+    if _nala_grp_entry is not None:
+        _nala_xobj[NameObject('/Group')] = _nala_grp_entry.clone(writer)
+    _nala_xobj.set_data(_raw_nala)
+    _nala_xobj = _nala_xobj.flate_encode()
+    _nala_xref = writer._add_object(_nala_xobj)
+
+    # Register /NalaFm in page /XObject resources
+    _pg_res = main_page[NameObject('/Resources')].get_object()
+    if NameObject('/XObject') not in _pg_res:
+        _pg_res[NameObject('/XObject')] = DictionaryObject()
+    _pg_res[NameObject('/XObject')].get_object()[NameObject('/NalaFm')] = _nala_xref
+
+    # Append Nala invocation to page /Contents array
+    _nala_do = DecodedStreamObject()
+    _nala_do.set_data(b'q\n/NalaFm Do\nQ\n')
+    _nala_do_ref = writer._add_object(_nala_do)
+    _curr_contents = main_page[NameObject('/Contents')].get_object()
+    if isinstance(_curr_contents, ArrayObject):
+        _curr_contents.append(_nala_do_ref)
+    else:
+        main_page[NameObject('/Contents')] = ArrayObject(
+            [main_page[NameObject('/Contents')], _nala_do_ref]
+        )
 
     # TrimBox in ET-sheet space: artwork trim corners at (offset_x-desp_x, offset_y-desp_y)
     _tb_x0 = offset_x - desp_x
