@@ -213,20 +213,38 @@ def circles():
 @app.route('/oneUp', methods=['POST'])
 def makeOneUp():
     try:
-        from one_up import make
         body = request.get_json(force=True)
-        make(
-            body['searchpath'],
-            body['pdffile'],
-            body['outfile'],
-            body['client'],
-            json.dumps(body['boxes']),
-            body['colors'],
-            json.dumps(body['info']),
-            body['separationsFolder'],
-            body['pathImages'],
-            body['names'],
-        )
+        boxes = body['boxes']
+        if isinstance(boxes, list):
+            # Multi-page: boxes is an array of per-page box dicts
+            from one_up import make_all_pages
+            make_all_pages(
+                body['searchpath'],
+                body['pdffile'],
+                body['outfile'],
+                body['client'],
+                boxes,
+                body['colors'],
+                json.dumps(body['info']),
+                body.get('separationsFolder', ''),
+                body.get('pathImages', []),
+                body.get('names', []),
+            )
+        else:
+            # Single-page (backward compatible)
+            from one_up import make
+            make(
+                body['searchpath'],
+                body['pdffile'],
+                body['outfile'],
+                body['client'],
+                json.dumps(boxes),
+                body['colors'],
+                json.dumps(body['info']),
+                separations_folder=body.get('separationsFolder', ''),
+                path_images=body.get('pathImages', []),
+                names=body.get('names', []),
+            )
         return 'ok'
     except (KeyError, TypeError) as e:
         return _bad_request(str(e))
@@ -254,15 +272,308 @@ def makeMultipage():
 def getInkCoverage():
     try:
         import numpy as np
-        import cv2
+        from PIL import Image as PILImage
         body  = request.get_json(force=True)
-        paths = body['paths'].split(',')
+        paths = [p.strip() for p in body['paths'].split(',') if p.strip()]
         result = []
-        for path in paths:
-            img        = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-            ink_cov    = 1 - float(np.mean(img / 255.0))
-            result.append(ink_cov)
-        return str(result)
+        for p in paths:
+            try:
+                im  = PILImage.open(p).convert("L")
+                arr = np.array(im, dtype=np.float32)
+                # tiffsep: 0 = full ink, 255 = no ink  → coverage = 1 - mean/255
+                result.append(1.0 - float(arr.mean() / 255.0))
+            except Exception:
+                result.append(0.0)
+        return jsonify(result)
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+# ---------------------------------------------------------------------------
+# TrimBox from separation
+# ---------------------------------------------------------------------------
+
+@app.route('/getSeparationNames', methods=['POST'])
+def getSeparationNames():
+    try:
+        from set_trimbox import get_separation_names
+        body = request.get_json(force=True)
+        pdf_path = body['pdffile']
+        names = get_separation_names(pdf_path)
+        return jsonify({'ok': True, 'separations': names})
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+@app.route('/classifySeparations', methods=['POST'])
+def classifySeparations():
+    """Classify a list of separation names into ink categories.
+    Body: { "names": ["Die Cut", "White", "CMYK C", ...] }
+    Returns: { "ok": true, "classifications": [{name, category, label, is_die_cut}, ...] }
+    """
+    try:
+        from set_trimbox import classify_separation
+        body = request.get_json(force=True)
+        names = body.get('names', [])
+        if not isinstance(names, list):
+            return _bad_request('names must be an array')
+        result = [dict(name=n, **classify_separation(n)) for n in names]
+        return jsonify({'ok': True, 'classifications': result})
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+@app.route('/extractInks', methods=['POST'])
+def extractInks():
+    """
+    Detect process and spot inks from a PDF.
+    Body: { "pdffile": "/abs/path/file.pdf" }
+    Returns: { ok, process, processDetected, spots }
+    """
+    try:
+        from services.pdf_inks import extract_inks
+        body = request.get_json(force=True)
+        result = extract_inks(body['pdffile'])
+        return jsonify({'ok': True, **result})
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+@app.route('/renderChannels', methods=['POST'])
+def renderChannels():
+    """
+    Render a PDF with selected process/spot channels enabled.
+    Body:
+      {
+        "pdffile": "/abs/path/file.pdf",
+        "channels": {"cyan": true, "magenta": true, "yellow": true, "black": true},
+        "spots": {"PANTONE 485 C": true}
+      }
+    Returns: { ok, pdfBase64 }
+    """
+    try:
+        from services.pdf_inks import render_channels
+        body = request.get_json(force=True)
+        result = render_channels(
+            body['pdffile'],
+            body.get('channels', {}),
+            body.get('spots', {}),
+        )
+        return jsonify(result)
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+@app.route('/convertRgbToCmykSelective', methods=['POST'])
+def convertRgbToCmykSelective():
+        """
+        Convert only RGB objects to CMYK while preserving DeviceN/Spot/CMYK and pure black vectors/text.
+        Body:
+            {
+                "pdffile": "/abs/path/source.pdf",
+                "outfile": "/abs/path/output.pdf",
+                "iccProfile": "/abs/path/profile.icc"
+            }
+        """
+        try:
+            from services.pdf_inks import convert_rgb_to_cmyk_selective
+            body = request.get_json(force=True)
+            result = convert_rgb_to_cmyk_selective(
+                    body['pdffile'],
+                    body['outfile'],
+                    body.get('iccProfile'),
+            )
+            return jsonify({'ok': True, **result})
+        except (KeyError, TypeError) as e:
+            return _bad_request(str(e))
+        except Exception as e:
+            return _server_error(e)
+
+
+@app.route('/injectColourText', methods=['POST'])
+def injectColourText():
+    """Inject a named spot-colour swatch into an existing PDF (in place).
+    Body: { "pdffile": "/abs/path/file.pdf", "colourName": "Special Blue", "r": 0, "g": 100, "b": 200 }
+    Returns: { "ok": true } or { "ok": false, "error": "..." }
+    """
+    try:
+        from inject_colour_text import inject_colour_text
+        body = request.get_json(force=True)
+        result = inject_colour_text(
+            body['pdffile'],
+            body['colourName'],
+            int(body.get('r', 0)),
+            int(body.get('g', 0)),
+            int(body.get('b', 0)),
+            c=body.get('c'),   # 0-100 from Nala DB, optional
+            m=body.get('m'),
+            y=body.get('y'),
+            k=body.get('k'),
+        )
+        if result['ok']:
+            return jsonify(result)
+        return jsonify(result), 422
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+@app.route('/setTrimboxFromSeparation', methods=['POST'])
+def setTrimboxFromSeparation():
+    try:
+        from set_trimbox import set_trimbox_from_separation
+        body = request.get_json(force=True)
+        result = set_trimbox_from_separation(
+            body['pdffile'],
+            body['outfile'],
+            body.get('separationName'),   # None → auto-detect
+        )
+        if result['ok']:
+            return jsonify(result)
+        return jsonify(result), 422
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+@app.route('/flattenPdf', methods=['POST'])
+def flattenPdf():
+    """
+    Convert a PDF to compatibility level 1.3 using GhostScript (pdfwrite).
+    Resolves font/version issues with legacy RIPs (Harlequin etc.).
+    Body: {
+      pdfPath:      absolute path to the source PDF,
+      outputPath:   (optional) destination path — overwrites source if omitted,
+      compatLevel:  (optional) float, default 1.3,
+      outlineFonts: (optional) bool, default true — convert text to curves
+    }
+    """
+    try:
+        import subprocess, shutil, os
+        from set_trimbox import _find_gs
+
+        body         = request.get_json(force=True)
+        pdf_path     = body.get('pdfPath')
+        output_path  = body.get('outputPath') or pdf_path
+        compat       = str(body.get('compatLevel', 1.3))
+        outline_fonts = body.get('outlineFonts', True)
+
+        if not pdf_path:
+            return _bad_request('pdfPath is required')
+        if not os.path.isfile(pdf_path):
+            return _bad_request(f'File not found: {pdf_path}')
+
+        gs = _find_gs()
+
+        # Write to a temp file first so we never corrupt the source
+        tmp = pdf_path + '.tmp_flatten.pdf'
+        cmd = [
+            gs,
+            '-dBATCH', '-dNOPAUSE', '-dQUIET',
+            '-sDEVICE=pdfwrite',
+            f'-dCompatibilityLevel={compat}',
+            f'-sOutputFile={tmp}',
+            pdf_path,
+        ]
+        if outline_fonts:
+            cmd.insert(-1, '-dNoOutputFonts')
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            return jsonify({'ok': False, 'error': result.stderr[:500]}), 500
+
+        shutil.move(tmp, output_path)
+        size = os.path.getsize(output_path)
+        return jsonify({'ok': True, 'outputPath': output_path, 'sizeBytes': size})
+
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+@app.route('/injectHalftone', methods=['POST'])
+def injectHalftone():
+    """
+    Inject a PDF Type 5 Halftone dictionary into a PDF file.
+    Body: {
+      pdfPath:      absolute path to the PDF (overwritten in place if outputPath omitted),
+      screeningSet: { default: [shape,freq,angle,"",""], exceptions: [{ColorName:[...]},...] },
+      outputPath:   (optional) write to a different file instead of overwriting
+    }
+    """
+    try:
+        body = request.get_json(force=True)
+        pdf_path      = body.get('pdfPath')
+        screening_set = body.get('screeningSet')
+        output_path   = body.get('outputPath')   # optional
+        if not pdf_path or not screening_set:
+            return _bad_request('pdfPath and screeningSet are required')
+        from inject_halftone import inject_halftone
+        result = inject_halftone(pdf_path, screening_set, output_path)
+        if result['ok']:
+            return jsonify(result)
+        return jsonify(result), 500
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+# ---------------------------------------------------------------------------
+# Imposition routes
+# ---------------------------------------------------------------------------
+
+@app.route('/imposeSchemes', methods=['GET'])
+def imposeSchemes():
+    """Return the list of supported imposition schemes."""
+    return jsonify({'schemes': ['saddle']})
+
+
+@app.route('/impose', methods=['POST'])
+def impose():
+    """
+    Impose a PDF as a printed booklet.
+    Body: {
+      pdffile   : absolute path to source PDF (reader order),
+      outfile   : absolute path for output imposed PDF,
+      scheme    : (optional) "saddle" (default),
+      marginMm  : (optional) outer margin in mm (default 10),
+      bleedMm   : (optional) bleed already in source PDF in mm (default 3),
+      marks     : (optional) bool, add prepress marks (default true),
+      colors    : (optional) [{name, l, a, ba}, ...] for colour bar
+    }
+    Returns: { ok: true, pages, padded_pages, sheets }
+    """
+    try:
+        from imposition import make_saddle
+        body   = request.get_json(force=True)
+        scheme = body.get('scheme', 'saddle')
+        if scheme != 'saddle':
+            return _bad_request(f'Unknown scheme: {scheme}. Supported: saddle')
+        result = make_saddle(
+            pdffile   = body['pdffile'],
+            outfile   = body['outfile'],
+            margin_mm = float(body.get('marginMm', 10)),
+            bleed_mm  = float(body.get('bleedMm', 3)),
+            colors    = body.get('colors', []),
+            marks     = bool(body.get('marks', True)),
+        )
+        return jsonify({'ok': True, **result})
     except (KeyError, TypeError) as e:
         return _bad_request(str(e))
     except Exception as e:

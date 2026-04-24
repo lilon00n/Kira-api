@@ -37,9 +37,10 @@ FONT_NAME         = 'Helvetica'
 CROP_MARK_SEP     = 4             # pt
 COTA_SEP          = 5  * POINT_TO_MM
 CRUZ_SEP          = 3  * POINT_TO_MM
-BLEED_EXCESS      = 5  * POINT_TO_MM
+BLEED_ET_MM       = 5                        # mm — editable bleed around TrimBox in ET sheet
+BLEED_EXCESS      = BLEED_ET_MM * POINT_TO_MM
 CROP_EXCESS       = CROP_SIZE * POINT_TO_MM
-MEDIA_EXCESS      = 5  * POINT_TO_MM
+MEDIA_EXCESS      = 10 * POINT_TO_MM         # 10mm outer margin (MediaBox boundary)
 DATA_PATH         = os.path.join(os.path.dirname(__file__), 'data')
 
 # Label column titles & matching info-dict keys
@@ -345,7 +346,7 @@ def _draw_salida_section(c, x0, y0, salida):
 # ---------------------------------------------------------------------------
 
 def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
-         separations_folder, path_images, names):
+         page_index=0, separations_folder=None, path_images=None, names=None):
     client_obj, title, boxes, info = _load_body_info(client, outfile, boxes, info)
 
     spot_colors = make_spot_colors(colorsJson)
@@ -373,8 +374,8 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
 
     # ---- Get source PDF dimensions ----
     src_reader  = PdfReader(pdffile)
-    src_w = float(src_reader.pages[0].mediabox.width)
-    src_h = float(src_reader.pages[0].mediabox.height)
+    src_w = float(src_reader.pages[page_index].mediabox.width)
+    src_h = float(src_reader.pages[page_index].mediabox.height)
 
     # ---- Layout calculations ----
     desp_x, desp_y = _get_bleed_trim_gap(boxes)
@@ -401,7 +402,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     from pypdf.generic import DecodedStreamObject, NameObject, ArrayObject
 
     writer = PdfWriter()
-    writer.append(src_reader, pages=[0])
+    writer.append(src_reader, pages=[page_index])
     main_page = writer.pages[0]
 
     # Record ALL spot-channel names from the source AI colorspaces.
@@ -428,12 +429,21 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
         if _bk in main_page:
             del main_page[_bk]
 
-    # Extract raw content bytes from the cloned source AI streams
-    _contents_obj = main_page[NameObject('/Contents')].get_object()
+    # Extract raw content bytes from the ORIGINAL source reader — NOT from the
+    # writer's clone.  In pypdf >=4 the lazy-clone mechanism can return the
+    # still-compressed (FlateDecode) bytes when get_data() is called on a
+    # writer-side stream object.  If that happens the OC-strip regex finds no
+    # matches (binary compressed data), the compressed bytes get wrapped in the
+    # q/cm/Q block, and PDF readers cannot parse the content stream →
+    # artwork area appears blank while the label band still renders correctly.
+    _src_page_orig = src_reader.pages[page_index]
+    _contents_obj = _src_page_orig[NameObject('/Contents')].get_object()
     if isinstance(_contents_obj, ArrayObject):
         _raw_art = b'\n'.join(ref.get_object().get_data() for ref in _contents_obj)
     else:
         _raw_art = _contents_obj.get_data()
+
+    print(f'[one_up] raw_art bytes extracted: {len(_raw_art)}')
 
     # Strip Optional Content Group markers (/OC /MCx BDC ... EMC).
     # The entire AI artwork is wrapped in one OC group (MC0).  Artpro+ treats
@@ -448,8 +458,11 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     # Resources (CS0..CS4, Fm0..Fm117, etc.) stay at page level — Artpro+ requires this.
     _header = f'q\n1 0 0 1 {offset_x:.6f} {offset_y:.6f} cm\n'.encode()
     _wrapped = _header + _raw_art + b'\nQ\n'
+    # flate_encode() compresses the stream and sets /Filter /FlateDecode explicitly,
+    # which avoids pypdf length-calculation quirks for DecodedStreamObject.
     _new_stream = DecodedStreamObject()
     _new_stream.set_data(_wrapped)
+    _new_stream = _new_stream.flate_encode()
     _new_ref = writer._add_object(_new_stream)
     main_page[NameObject('/Contents')] = _new_ref
 
@@ -570,16 +583,28 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
             [main_page[NameObject('/Contents')], _nala_do_ref]
         )
 
-    # TrimBox in ET-sheet space: artwork trim corners at (offset_x-desp_x, offset_y-desp_y)
+    # TrimBox = original document trim, repositioned in ET-sheet space
     _tb_x0 = offset_x - desp_x
     _tb_y0 = offset_y - desp_y
-    main_page.trimbox = RectangleObject((_tb_x0, _tb_y0, _tb_x0 + trim_w, _tb_y0 + trim_h))
+    main_page.trimbox  = RectangleObject((_tb_x0, _tb_y0, _tb_x0 + trim_w, _tb_y0 + trim_h))
 
-    # CropBox = MediaBox = full positive ET sheet
+    # BleedBox = TrimBox ± BLEED_ET_MM (default 5mm, editable via BLEED_ET_MM constant)
+    _bl = BLEED_ET_MM * POINT_TO_MM
+    main_page.bleedbox = RectangleObject((
+        _tb_x0 - _bl, _tb_y0 - _bl,
+        _tb_x0 + trim_w + _bl, _tb_y0 + trim_h + _bl,
+    ))
+
+    # MediaBox = full ET sheet (MEDIA_EXCESS=10mm outer margin around all content)
+    main_page.mediabox = RectangleObject((0.0, 0.0, float(media_w), float(media_h)))
+
+    # CropBox = MediaBox: the full ET sheet is visible by default in PDF viewers.
+    # This shows the complete approval document (artwork + crop & reg marks + label band).
+    # TrimBox (prepress cut) and BleedBox (bleed area) remain separate for production use.
     main_page[NameObject('/CropBox')] = RectangleObject((0.0, 0.0, float(media_w), float(media_h)))
 
-    # ---- Separation pages ----
-    for index, image_name in enumerate(path_images):
+    # ---- Separation pages (optional — only rendered when path_images is provided) ----
+    for index, image_name in enumerate(path_images or []):
         img_path = separations_folder + image_name
         sep_h    = src_h + 10
 
@@ -600,6 +625,45 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
 
     with open(outfile, 'wb') as f:
         writer.write(f)
+
+
+def make_all_pages(searchpath, pdffile, outfile, client, boxes_list, colorsJson, info,
+                   separations_folder=None, path_images=None, names=None):
+    """Generate one ET sheet per source page and merge all sheets into *outfile*.
+
+    For single-page PDFs this delegates directly to ``make()`` to avoid any
+    overhead.  For multi-page PDFs each page is rendered to a temporary file
+    which are then merged in order.
+    """
+    if len(boxes_list) == 1:
+        make(searchpath, pdffile, outfile, client, boxes_list[0], colorsJson, info,
+             page_index=0, separations_folder=separations_folder,
+             path_images=path_images, names=names)
+        return
+
+    import tempfile
+    from pypdf import PdfWriter as _PdfWriter
+
+    temp_files = []
+    try:
+        for i, boxes in enumerate(boxes_list):
+            tmp = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+            tmp.close()
+            make(searchpath, pdffile, tmp.name, client, boxes, colorsJson, info,
+                 page_index=i)
+            temp_files.append(tmp.name)
+
+        merger = _PdfWriter()
+        for tmp_path in temp_files:
+            merger.append(tmp_path)
+        with open(outfile, 'wb') as f:
+            merger.write(f)
+    finally:
+        for tmp_path in temp_files:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------

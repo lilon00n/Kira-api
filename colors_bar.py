@@ -14,7 +14,8 @@ from pdf_utils import get_source_info, create_overlay_canvas, finalize_and_merge
 
 
 def make(searchpath, pdffile, outfile, colors, intensities, size, x, y, place, sideX, sideY):
-    intensities = [float(v) for v in str(intensities).split(',')]
+    # User enters integer percentages (e.g. "100,70,50,20"); divide by 100 to get 0-1 tint range
+    intensities = [float(v) / 100.0 for v in str(intensities).split(',')]
     size = float(size)
     x = float(x)
     y = float(y)
