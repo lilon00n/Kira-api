@@ -534,6 +534,56 @@ def injectHalftone():
         return _server_error(e)
 
 
+@app.route('/embed-screening', methods=['POST'])
+def embedScreening():
+    """
+    Inject a PDF Type 5 Halftone into a PDF using pikepdf (no re-distillation).
+    Accepts Nala's per-separation format directly.
+    Body: {
+      pdfPath:     absolute path to source PDF,
+      outputPath:  (optional) destination path — overwrites source if omitted,
+      separations: [{name, angle, frequency, psName}, ...]
+    }
+    psName is the Harlequin/PDF spot-function name (e.g. "SimpleDot", "Round").
+    """
+    try:
+        import re
+        body        = request.get_json(force=True)
+        pdf_path    = body.get('pdfPath')
+        output_path = body.get('outputPath')
+        separations = body.get('separations', [])
+        if not pdf_path or not separations:
+            return _bad_request('pdfPath and separations are required')
+
+        # Use Black (or first) separation as /Default
+        black_sep = next(
+            (s for s in separations if re.search(r'black|negro|\bk\b|key', s.get('name', ''), re.I)),
+            separations[0]
+        )
+        screening_set = {
+            'default': [
+                black_sep.get('psName') or 'SimpleDot',
+                float(black_sep['frequency']),
+                float(black_sep['angle']),
+                '', '',
+            ],
+            'exceptions': [
+                {s['name']: [s.get('psName') or 'SimpleDot', float(s['frequency']), float(s['angle']), '', '']}
+                for s in separations
+            ],
+        }
+
+        from inject_halftone import inject_halftone
+        result = inject_halftone(pdf_path, screening_set, output_path)
+        if result['ok']:
+            return jsonify(result)
+        return jsonify(result), 500
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
 # ---------------------------------------------------------------------------
 # Imposition routes
 # ---------------------------------------------------------------------------
