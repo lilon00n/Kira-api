@@ -602,7 +602,8 @@ def _convert_rgb_image_to_cmyk(image_stream: Stream, resources_chain, icc_profil
         pil_img = PdfImage(image_stream).as_pil_image()
         if pil_img.mode not in ('RGB',):
             pil_img = pil_img.convert('RGB')
-        width, height = pil_img.size
+        if pil_img.size != (width, height):
+            pil_img = pil_img.resize((width, height), Image.LANCZOS)
         raw = pil_img.tobytes()
     except Exception:
         return {'converted': False, 'reason': 'unfilterable-stream'}
@@ -1378,7 +1379,7 @@ def render_channels(pdf_path: str, channels: Dict[str, bool], spots: Optional[Di
             debug['imageUnfilterable'] += page_debug['imageUnfilterable']
             debug['images'].extend(page_debug.get('images', []))
 
-        pdf.save(temp_path)
+        pdf.save(temp_path, object_stream_mode=pikepdf.ObjectStreamMode.disable)
 
     with open(temp_path, 'rb') as f:
         payload = f.read()
@@ -1418,7 +1419,7 @@ def convert_rgb_to_cmyk_selective(pdf_path: str, outfile: str, icc_profile: Opti
             conversion_debug['rgbImagesConverted'] += page_debug.get('rgbImagesConverted', 0)
             conversion_debug['rgbImagesSkipped'] += page_debug.get('rgbImagesSkipped', 0)
 
-        pdf.save(outfile)
+        pdf.save(outfile, object_stream_mode=pikepdf.ObjectStreamMode.disable)
 
     post = extract_inks(outfile)
     return {

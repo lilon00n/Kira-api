@@ -483,7 +483,7 @@ def _downsample_images(pdf_path: str, out_path: str, max_dpi: float) -> int:
             except Exception:
                 pass
 
-        pdf.save(out_path)
+        pdf.save(out_path, object_stream_mode=pikepdf.ObjectStreamMode.disable)
 
     return downsampled
 
@@ -500,7 +500,7 @@ def _restore_pdf_boxes(original_path: str, target_path: str):
                         val = orig_page.get(box)
                         if val is not None:
                             tgt_page[box] = val
-                target.save(tmp)
+                target.save(tmp, object_stream_mode=pikepdf.ObjectStreamMode.disable)
         shutil.move(tmp, target_path)
     except Exception:
         if os.path.exists(tmp):
