@@ -8,6 +8,7 @@ import math
 import os
 import shutil
 import subprocess
+import zlib
 import tempfile
 from typing import Dict, List, Optional
 
@@ -301,6 +302,15 @@ def fix_pdf(pdf_path: str, out_path: str, options: dict, icc_profile: str = DEFA
             applied.append({'fix': 'convertRgb', 'converted': total, 'iccProfile': icc_profile})
             working = tmp
 
+        if options.get('cropToMediabox', True) and options.get('downsampleImages', False):
+            fd, tmp_crop = tempfile.mkstemp(suffix='_crop.pdf')
+            os.close(fd)
+            tmp_files.append(tmp_crop)
+            n_cropped = _crop_images_to_mediabox(working, tmp_crop)
+            if n_cropped > 0:
+                applied.append({'fix': 'cropToMediabox', 'count': n_cropped})
+                working = tmp_crop
+
         if options.get('downsampleImages', False):
             max_dpi = float(options.get('maxDpi', 300))
             fd, tmp2 = tempfile.mkstemp(suffix='_downsample.pdf')
@@ -339,6 +349,20 @@ def fix_pdf(pdf_path: str, out_path: str, options: dict, icc_profile: str = DEFA
     }
 
 
+def _concat_ctm(cur, m):
+    # CTM_new = m × CTM_old  (PDF spec: cm premultiplies the CTM)
+    a1, b1, c1, d1, e1, f1 = cur
+    a2, b2, c2, d2, e2, f2 = m
+    return [
+        a2 * a1 + b2 * c1,
+        a2 * b1 + b2 * d1,
+        c2 * a1 + d2 * c1,
+        c2 * b1 + d2 * d1,
+        e2 * a1 + f2 * c1 + e1,
+        e2 * b1 + f2 * d1 + f1,
+    ]
+
+
 def _render_sizes_from_page(page) -> dict:
     """
     Parse page content stream and return {xobj_name: (rendered_w_pts, rendered_h_pts)}.
@@ -354,19 +378,6 @@ def _render_sizes_from_page(page) -> dict:
     ctm_stack = []
     ctm = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]  # identity
 
-    def concat(cur, m):
-        # CTM_new = m × CTM_old  (PDF spec: cm premultiplies the CTM)
-        a1, b1, c1, d1, e1, f1 = cur
-        a2, b2, c2, d2, e2, f2 = m
-        return [
-            a2 * a1 + b2 * c1,
-            a2 * b1 + b2 * d1,
-            c2 * a1 + d2 * c1,
-            c2 * b1 + d2 * d1,
-            e2 * a1 + f2 * c1 + e1,
-            e2 * b1 + f2 * d1 + f1,
-        ]
-
     for ins in instructions:
         op = str(ins.operator)
         operands = list(ins.operands)
@@ -377,7 +388,7 @@ def _render_sizes_from_page(page) -> dict:
                 ctm = ctm_stack.pop()
         elif op == 'cm' and len(operands) == 6:
             try:
-                ctm = concat(ctm, [float(v) for v in operands])
+                ctm = _concat_ctm(ctm, [float(v) for v in operands])
             except Exception:
                 pass
         elif op == 'Do' and operands:
@@ -392,6 +403,197 @@ def _render_sizes_from_page(page) -> dict:
                     pw, ph = sizes[name]
                     sizes[name] = (max(pw, rw), max(ph, rh))
     return sizes
+
+
+def _crop_images_to_mediabox(pdf_path: str, out_path: str) -> int:
+    """
+    Crop each image XObject to the visible area within the page MediaBox.
+    Inserts an extra `cm` before each `Do` to preserve visual placement,
+    and replaces the XObject with only the visible pixels.
+    Only processes axis-aligned (non-rotated) images.
+    """
+    cropped_count = 0
+    visited: set = set()
+
+    def _make_cm_ins(vals):
+        ops = [pikepdf.Object.parse(f'{v:.8f}'.encode()) for v in vals]
+        return pikepdf.ContentStreamInstruction(ops, pikepdf.Operator('cm'))
+
+    with Pdf.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            try:
+                mediabox = page.get('/MediaBox')
+                if mediabox is None:
+                    continue
+                mb_x0, mb_y0 = float(mediabox[0]), float(mediabox[1])
+                mb_x1, mb_y1 = float(mediabox[2]), float(mediabox[3])
+                if mb_x0 >= mb_x1 or mb_y0 >= mb_y1:
+                    continue
+
+                res = page.get('/Resources')
+                xobjects = res.get('/XObject') if res else None
+                if not xobjects:
+                    continue
+
+                try:
+                    instructions = list(pikepdf.parse_content_stream(page))
+                except Exception:
+                    continue
+
+                ctm_stack = []
+                ctm = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+                insertions: dict = {}  # {do_idx: new_cm_instruction}
+                xnames_seen_on_page: set = set()
+
+                for i, ins in enumerate(instructions):
+                    op = str(ins.operator)
+                    operands = list(ins.operands)
+
+                    if op == 'q':
+                        ctm_stack.append(ctm[:])
+                    elif op == 'Q':
+                        if ctm_stack:
+                            ctm = ctm_stack.pop()
+                    elif op == 'cm' and len(operands) == 6:
+                        try:
+                            ctm = _concat_ctm(ctm, [float(v) for v in operands])
+                        except Exception:
+                            pass
+                    elif op == 'Do' and operands:
+                        xname = str(operands[0])
+                        if xname not in xobjects:
+                            continue
+                        xobj = xobjects[xname]
+                        if not isinstance(xobj, Stream) or xobj.get('/Subtype') != Name.Image:
+                            continue
+
+                        # Skip images used more than once on this page (shared XObject)
+                        if xname in xnames_seen_on_page:
+                            continue
+                        xnames_seen_on_page.add(xname)
+
+                        # Skip already-processed XObjects (shared across pages)
+                        try:
+                            og = xobj.objgen
+                            obj_key = (int(og[0]), int(og[1]))
+                        except Exception:
+                            obj_key = id(xobj)
+                        if obj_key in visited:
+                            continue
+
+                        w = int(xobj.get('/Width', 0))
+                        h = int(xobj.get('/Height', 0))
+                        bpc = int(xobj.get('/BitsPerComponent', 8))
+                        if w <= 0 or h <= 0 or bpc != 8:
+                            continue
+                        if (xobj.get('/SMask') is not None
+                                or xobj.get('/Mask') is not None
+                                or bool(xobj.get('/ImageMask', False))):
+                            continue
+
+                        a, b, c, d, e, f = ctm
+                        # Only axis-aligned images (no rotation/shear)
+                        if abs(b) > 0.5 or abs(c) > 0.5:
+                            continue
+                        if abs(a) < 0.01 or abs(d) < 0.01:
+                            continue
+
+                        # Image bounding box in page space
+                        img_x0, img_x1 = (e, e + a) if a > 0 else (e + a, e)
+                        img_y0, img_y1 = (f, f + d) if d > 0 else (f + d, f)
+
+                        # Intersection with MediaBox
+                        clip_x0 = max(img_x0, mb_x0)
+                        clip_y0 = max(img_y0, mb_y0)
+                        clip_x1 = min(img_x1, mb_x1)
+                        clip_y1 = min(img_y1, mb_y1)
+
+                        if clip_x0 >= clip_x1 or clip_y0 >= clip_y1:
+                            continue  # entirely outside page
+
+                        img_w_pts = img_x1 - img_x0
+                        img_h_pts = img_y1 - img_y0
+
+                        # Visible fraction in PDF image unit space [0,1]×[0,1]
+                        ix0 = max(0.0, min(1.0, (clip_x0 - img_x0) / img_w_pts))
+                        ix1 = max(0.0, min(1.0, (clip_x1 - img_x0) / img_w_pts))
+                        iy0 = max(0.0, min(1.0, (clip_y0 - img_y0) / img_h_pts))
+                        iy1 = max(0.0, min(1.0, (clip_y1 - img_y0) / img_h_pts))
+
+                        if ix1 - ix0 < 1e-4 or iy1 - iy0 < 1e-4:
+                            continue
+                        # Already fully visible — nothing to crop
+                        if ix0 < 1e-4 and iy0 < 1e-4 and ix1 > 1 - 1e-4 and iy1 > 1 - 1e-4:
+                            continue
+
+                        # PIL crop bounds: PDF y=0 at bottom, PIL y=0 at top
+                        px0 = max(0, int(ix0 * w))
+                        px1 = min(w, int(math.ceil(ix1 * w)))
+                        py0 = max(0, int((1.0 - iy1) * h))
+                        py1 = min(h, int(math.ceil((1.0 - iy0) * h)))
+
+                        if px1 - px0 <= 0 or py1 - py0 <= 0:
+                            continue
+
+                        try:
+                            img = PdfImage(xobj).as_pil_image()
+                            cropped_img = img.crop((px0, py0, px1, py1))
+                        except Exception:
+                            continue
+
+                        cs = xobj.get('/ColorSpace')
+                        if cs == Name.DeviceCMYK or img.mode == 'CMYK':
+                            if cropped_img.mode != 'CMYK':
+                                cropped_img = cropped_img.convert('CMYK')
+                            out_cs = Name.DeviceCMYK
+                        elif cs == Name.DeviceGray or img.mode == 'L':
+                            if cropped_img.mode != 'L':
+                                cropped_img = cropped_img.convert('L')
+                            out_cs = Name.DeviceGray
+                        else:
+                            cropped_img = cropped_img.convert('RGB')
+                            out_cs = Name.DeviceRGB
+
+                        xobj.write(zlib.compress(cropped_img.tobytes()), filter=Name.FlateDecode)
+                        xobj['/Width'] = px1 - px0
+                        xobj['/Height'] = py1 - py0
+                        xobj['/ColorSpace'] = out_cs
+                        if '/DecodeParms' in xobj:
+                            del xobj['/DecodeParms']
+
+                        # Extra cm: maps cropped image [0,1]×[0,1] → visible fraction
+                        # of original unit space. Combined with the existing CTM, the
+                        # cropped image renders at exactly the same page location.
+                        insertions[i] = _make_cm_ins([ix1 - ix0, 0, 0, iy1 - iy0, ix0, iy0])
+                        visited.add(obj_key)
+                        cropped_count += 1
+
+                if not insertions:
+                    continue
+
+                # Rebuild content stream inserting new cm before each affected Do
+                modified = []
+                for i, ins in enumerate(instructions):
+                    if i in insertions:
+                        modified.append(insertions[i])
+                    modified.append(ins)
+
+                new_bytes = pikepdf.unparse_content_stream(modified)
+                try:
+                    contents = page.get('/Contents')
+                    if isinstance(contents, Array):
+                        page['/Contents'] = pdf.make_stream(new_bytes)
+                    else:
+                        page.Contents.write(new_bytes)
+                except Exception:
+                    pass
+
+            except Exception:
+                pass
+
+        pdf.save(out_path, object_stream_mode=pikepdf.ObjectStreamMode.disable)
+
+    return cropped_count
 
 
 def _downsample_images(pdf_path: str, out_path: str, max_dpi: float) -> int:
@@ -471,7 +673,7 @@ def _downsample_images(pdf_path: str, out_path: str, max_dpi: float) -> int:
                         new_h = max(1, int(h * scale))
                         img_r = img.resize((new_w, new_h), PILImage.LANCZOS)
 
-                        xobj.write(img_r.tobytes(), filter=Name.FlateDecode)
+                        xobj.write(zlib.compress(img_r.tobytes()), filter=Name.FlateDecode)
                         xobj['/Width'] = new_w
                         xobj['/Height'] = new_h
                         xobj['/ColorSpace'] = out_cs

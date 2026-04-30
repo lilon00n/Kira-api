@@ -1,6 +1,7 @@
 import os
 import tempfile
 import io
+import zlib
 from base64 import b64encode
 from typing import Dict, List, Optional, Tuple
 
@@ -624,7 +625,7 @@ def _convert_rgb_image_to_cmyk(image_stream: Stream, resources_chain, icc_profil
         cmyk = rgb.convert('CMYK')
 
     out_bytes = cmyk.tobytes()
-    image_stream.write(out_bytes, filter=Name.FlateDecode)
+    image_stream.write(zlib.compress(out_bytes), filter=Name.FlateDecode)
     image_stream['/ColorSpace'] = Name.DeviceCMYK
     image_stream['/BitsPerComponent'] = 8
     if '/DecodeParms' in image_stream:
@@ -998,7 +999,7 @@ def _inspect_or_patch_image(image_stream: Stream, resources_chain, channels: Dic
             raw = PdfImage(image_stream).read_bytes()
             patched = patch_fn(raw)
             if patched != raw:
-                image_stream.write(patched, filter=Name.FlateDecode)
+                image_stream.write(zlib.compress(patched), filter=Name.FlateDecode)
                 if '/DecodeParms' in image_stream:
                     del image_stream['/DecodeParms']
                 return True, True

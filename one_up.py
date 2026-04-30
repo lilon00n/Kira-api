@@ -407,12 +407,9 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
 
     # Record ALL spot-channel names from the source AI colorspaces.
     # Used for diagnostics / future reference; no stripping is performed.
-    _src_cs_dict = (
-        main_page[NameObject('/Resources')]
-        .get_object()
-        .get('/ColorSpace', {})
-        .get_object()
-    )
+    _src_res = main_page[NameObject('/Resources')].get_object()
+    _src_cs_raw = _src_res.get('/ColorSpace')
+    _src_cs_dict = _src_cs_raw.get_object() if _src_cs_raw is not None else {}
     _src_spot_names = set()
     for _cs_val in _src_cs_dict.values():
         try:
@@ -454,9 +451,16 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     _raw_art = re.sub(rb'/OC\s+/\w+\s+BDC\s*', b'', _raw_art)
     _raw_art = re.sub(rb'\bEMC\b\s*', b'', _raw_art)
 
-    # Wrap artwork in q/cm/Q so it renders at (offset_x, offset_y) on the ET sheet.
+    # If the source PDF was cropped in place (e.g. set_trimbox_from_separation),
+    # its visible box can start at a non-zero origin. Subtract that origin so the
+    # artwork lands centered on the ET sheet instead of keeping the old page offset.
+    _src_view_box = _src_page_orig.cropbox or _src_page_orig.mediabox
+    _src_x0 = float(_src_view_box.left)
+    _src_y0 = float(_src_view_box.bottom)
+
+    # Wrap artwork in q/cm/Q so it renders at the ET artwork origin.
     # Resources (CS0..CS4, Fm0..Fm117, etc.) stay at page level — Artpro+ requires this.
-    _header = f'q\n1 0 0 1 {offset_x:.6f} {offset_y:.6f} cm\n'.encode()
+    _header = f'q\n1 0 0 1 {offset_x - _src_x0:.6f} {offset_y - _src_y0:.6f} cm\n'.encode()
     _wrapped = _header + _raw_art + b'\nQ\n'
     # flate_encode() compresses the stream and sets /Filter /FlateDecode explicitly,
     # which avoids pypdf length-calculation quirks for DecodedStreamObject.

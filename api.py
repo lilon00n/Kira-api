@@ -585,6 +585,66 @@ def embedScreening():
 
 
 # ---------------------------------------------------------------------------
+# Preflight routes
+# ---------------------------------------------------------------------------
+
+@app.route('/preflight/analyze', methods=['POST'])
+def preflightAnalyze():
+    """
+    Analyze a PDF for preflight issues.
+    Body: { pdfPath, maxDpi (optional, default 300) }
+    Returns: { ok, issues, hasIssues, rgbContent, whiteOverprint, enrichedBlack, imageResolution, fonts, spots }
+    """
+    try:
+        from preflight import analyze_pdf
+        body     = request.get_json(force=True)
+        pdf_path = body.get('pdfPath')
+        max_dpi  = float(body.get('maxDpi', 300))
+        if not pdf_path:
+            return _bad_request('pdfPath is required')
+        result = analyze_pdf(pdf_path, max_dpi)
+        return jsonify(result)
+    except FileNotFoundError as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+@app.route('/preflight/fix', methods=['POST'])
+def preflightFix():
+    """
+    Apply preflight fixes to a PDF and save result to outPath.
+    Body: {
+      pdfPath,
+      outPath,
+      iccProfile (optional, default "fogra39"),
+      options: {
+        convertRgb (bool, default true),
+        outlineFonts (bool, default false),
+        downsampleImages (bool, default false),
+        maxDpi (number, default 300)
+      }
+    }
+    Returns: { ok, outPath, appliedFixes, fixCount }
+    """
+    try:
+        from preflight import fix_pdf
+        body       = request.get_json(force=True)
+        pdf_path   = body.get('pdfPath')
+        out_path   = body.get('outPath')
+        options    = body.get('options', {})
+        icc        = body.get('iccProfile', 'fogra39')
+        if not pdf_path or not out_path:
+            return _bad_request('pdfPath and outPath are required')
+        result = fix_pdf(pdf_path, out_path, options, icc)
+        return jsonify(result)
+    except FileNotFoundError as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+# ---------------------------------------------------------------------------
 # Imposition routes
 # ---------------------------------------------------------------------------
 
