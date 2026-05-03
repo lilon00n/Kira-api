@@ -108,7 +108,8 @@ def _get_label_height(colors, info, nala_h, logo_h):
     col_h    = len(colors)         * (TEXT_HEIGHT + 8)
     mm_h     = len(mat_mach) * 2   * (TEXT_HEIGHT + 4)
     inf_h    = len(TITLES)         * (TEXT_HEIGHT + 4)
-    return max(nala_h + 10 + logo_h, inf_h, col_h, mm_h) + 10
+    logos_h  = nala_h + (10 if nala_h > 0 and logo_h > 0 else 0) + logo_h
+    return max(logos_h, inf_h, col_h, mm_h) + 10
 
 
 def _get_label_width(colors, info, logo_w):
@@ -346,8 +347,12 @@ def _draw_salida_section(c, x0, y0, salida):
 # ---------------------------------------------------------------------------
 
 def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
-         page_index=0, separations_folder=None, path_images=None, names=None):
+         page_index=0, separations_folder=None, path_images=None, names=None, logo_path=None):
     client_obj, title, boxes, info = _load_body_info(client, outfile, boxes, info)
+
+    # Override client logo if a custom path was provided and the file exists
+    if logo_path and os.path.exists(logo_path):
+        client_obj.logo = logo_path
 
     spot_colors = make_spot_colors(colorsJson)
 
@@ -366,11 +371,19 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
             from PIL import Image as PILImage
             img = PILImage.open(logo_path)
             iw, ih = img.size          # pixels
-            # Scale factor 0.05 → approximate pt size (72 pt/in, 96 dpi assumed)
-            logo_w = iw * 72 / 96 * 0.05
-            logo_h = ih * 72 / 96 * 0.05
+            raw_w_pt = iw * 72 / 96    # natural width in points (72pt/in, 96dpi)
+            raw_h_pt = ih * 72 / 96    # natural height in points
+            MAX_LOGO_H = 25            # cap at ~8.8mm so it fits the label band
+            scale = min(1.0, MAX_LOGO_H / raw_h_pt) if raw_h_pt > 0 else 1.0
+            logo_w = raw_w_pt * scale
+            logo_h = raw_h_pt * scale
         except Exception:
-            logo_w, logo_h = 30, 10   # safe fallback
+            logo_w, logo_h = 40, 20   # safe fallback
+
+    # Si el cliente tiene logo propio, suprimir el logo de Nala
+    if logo_h > 0:
+        nala_h = 0
+        nala_w = 0
 
     # ---- Get source PDF dimensions ----
     src_reader  = PdfReader(pdffile)
@@ -440,8 +453,6 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     else:
         _raw_art = _contents_obj.get_data()
 
-    print(f'[one_up] raw_art bytes extracted: {len(_raw_art)}')
-
     # Strip Optional Content Group markers (/OC /MCx BDC ... EMC).
     # The entire AI artwork is wrapped in one OC group (MC0).  Artpro+ treats
     # marked content as optional layers; without /OCProperties in the catalog
@@ -486,7 +497,10 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     nala_y = MEDIA_EXCESS + label_h - nala_h
 
     logo_x = MEDIA_EXCESS + CROP_EXCESS
-    logo_y = MEDIA_EXCESS + label_h - nala_h - 10 - logo_h
+    if nala_h > 0:
+        logo_y = MEDIA_EXCESS + label_h - nala_h - 10 - logo_h
+    else:
+        logo_y = MEDIA_EXCESS + label_h - 5 - logo_h
     if os.path.exists(logo_path):
         try:
             c.drawImage(logo_path, logo_x, logo_y,
@@ -529,63 +543,65 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     label_reader = PdfReader(label_buf)
     main_page.merge_page(label_reader.pages[0])
 
-    # Nala logo: Form XObject — keeps its PANTONE 7711 C / 225 C etc. self-contained
-    # at the XObject level.  We build the dict manually with primitives (no clone())
-    # to avoid the indirect_reference bug.
-    scale = 0.6
-    nala_reader2 = PdfReader(nala_pdf_path)
-    nala_page = nala_reader2.pages[0]
-    _nala_pw = float(nala_page.mediabox.width)
-    _nala_ph = float(nala_page.mediabox.height)
+    # Nala logo: solo cuando el cliente no tiene logo propio
+    if nala_h > 0:
+        # Form XObject — keeps its PANTONE 7711 C / 225 C etc. self-contained
+        # at the XObject level.  We build the dict manually with primitives (no clone())
+        # to avoid the indirect_reference bug.
+        scale = 0.6
+        nala_reader2 = PdfReader(nala_pdf_path)
+        nala_page = nala_reader2.pages[0]
+        _nala_pw = float(nala_page.mediabox.width)
+        _nala_ph = float(nala_page.mediabox.height)
 
-    _nala_cont = nala_page[NameObject('/Contents')].get_object()
-    if isinstance(_nala_cont, ArrayObject):
-        _raw_nala = b'\n'.join(ref.get_object().get_data() for ref in _nala_cont)
-    else:
-        _raw_nala = _nala_cont.get_data()
-    # Strip OC markers from Nala logo (fixes "marked content deleted" preflight error)
-    _raw_nala = re.sub(rb'/OC\s+/\w+\s+BDC\s*', b'', _raw_nala)
-    _raw_nala = re.sub(rb'\bEMC\b\s*', b'', _raw_nala)
+        _nala_cont = nala_page[NameObject('/Contents')].get_object()
+        if isinstance(_nala_cont, ArrayObject):
+            _raw_nala = b'\n'.join(ref.get_object().get_data() for ref in _nala_cont)
+        else:
+            _raw_nala = _nala_cont.get_data()
+        # Strip OC markers from Nala logo (fixes "marked content deleted" preflight error)
+        _raw_nala = re.sub(rb'/OC\s+/\w+\s+BDC\s*', b'', _raw_nala)
+        _raw_nala = re.sub(rb'\bEMC\b\s*', b'', _raw_nala)
 
-    _nala_xobj = DecodedStreamObject()
-    _nala_xobj[NameObject('/Type')] = NameObject('/XObject')
-    _nala_xobj[NameObject('/Subtype')] = NameObject('/Form')
-    _nala_xobj[NameObject('/FormType')] = NumberObject(1)
-    _nala_xobj[NameObject('/BBox')] = ArrayObject([
-        FloatObject(0), FloatObject(0), FloatObject(_nala_pw), FloatObject(_nala_ph),
-    ])
-    # Matrix = [scale 0 0 scale tx ty] — combines scale and translation
-    _nala_xobj[NameObject('/Matrix')] = ArrayObject([
-        FloatObject(scale), FloatObject(0), FloatObject(0), FloatObject(scale),
-        FloatObject(nala_x), FloatObject(nala_y),
-    ])
-    _nala_res_entry = nala_page.get(NameObject('/Resources'))
-    if _nala_res_entry is not None:
-        _nala_xobj[NameObject('/Resources')] = _nala_res_entry.clone(writer)
-    _nala_grp_entry = nala_page.get(NameObject('/Group'))
-    if _nala_grp_entry is not None:
-        _nala_xobj[NameObject('/Group')] = _nala_grp_entry.clone(writer)
-    _nala_xobj.set_data(_raw_nala)
-    _nala_xobj = _nala_xobj.flate_encode()
-    _nala_xref = writer._add_object(_nala_xobj)
+        _nala_xobj = DecodedStreamObject()
+        _nala_xobj[NameObject('/Type')] = NameObject('/XObject')
+        _nala_xobj[NameObject('/Subtype')] = NameObject('/Form')
+        _nala_xobj[NameObject('/FormType')] = NumberObject(1)
+        _nala_xobj[NameObject('/BBox')] = ArrayObject([
+            FloatObject(0), FloatObject(0), FloatObject(_nala_pw), FloatObject(_nala_ph),
+        ])
+        # Matrix = [scale 0 0 scale tx ty] — combines scale and translation
+        _nala_xobj[NameObject('/Matrix')] = ArrayObject([
+            FloatObject(scale), FloatObject(0), FloatObject(0), FloatObject(scale),
+            FloatObject(nala_x), FloatObject(nala_y),
+        ])
+        _nala_res_entry = nala_page.get(NameObject('/Resources'))
+        if _nala_res_entry is not None:
+            _nala_xobj[NameObject('/Resources')] = _nala_res_entry.clone(writer)
+        _nala_grp_entry = nala_page.get(NameObject('/Group'))
+        if _nala_grp_entry is not None:
+            _nala_xobj[NameObject('/Group')] = _nala_grp_entry.clone(writer)
+        _nala_xobj.set_data(_raw_nala)
+        _nala_xobj = _nala_xobj.flate_encode()
+        _nala_xref = writer._add_object(_nala_xobj)
 
-    # Register /NalaFm in page /XObject resources
-    _pg_res = main_page[NameObject('/Resources')].get_object()
-    if NameObject('/XObject') not in _pg_res:
-        _pg_res[NameObject('/XObject')] = DictionaryObject()
-    _pg_res[NameObject('/XObject')].get_object()[NameObject('/NalaFm')] = _nala_xref
+        # Register /NalaFm in page /XObject resources
+        _pg_res = main_page[NameObject('/Resources')].get_object()
+        if NameObject('/XObject') not in _pg_res:
+            _pg_res[NameObject('/XObject')] = DictionaryObject()
+        _pg_res[NameObject('/XObject')].get_object()[NameObject('/NalaFm')] = _nala_xref
 
-    # Append Nala invocation to page /Contents array
-    _nala_do = DecodedStreamObject()
-    _nala_do.set_data(b'q\n/NalaFm Do\nQ\n')
-    _nala_do_ref = writer._add_object(_nala_do)
-    _curr_contents = main_page[NameObject('/Contents')].get_object()
-    if isinstance(_curr_contents, ArrayObject):
-        _curr_contents.append(_nala_do_ref)
-    else:
-        main_page[NameObject('/Contents')] = ArrayObject(
-            [main_page[NameObject('/Contents')], _nala_do_ref]
-        )
+        # Append Nala invocation to page /Contents array
+        _nala_do = DecodedStreamObject()
+        _nala_do.set_data(b'q\n/NalaFm Do\nQ\n')
+        _nala_do_ref = writer._add_object(_nala_do)
+        _curr_contents = main_page[NameObject('/Contents')].get_object()
+        if isinstance(_curr_contents, ArrayObject):
+            _curr_contents.append(_nala_do_ref)
+        else:
+            main_page[NameObject('/Contents')] = ArrayObject(
+                [main_page[NameObject('/Contents')], _nala_do_ref]
+            )
 
     # TrimBox = original document trim, repositioned in ET-sheet space
     _tb_x0 = offset_x - desp_x
@@ -625,14 +641,13 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
         sep_buf.seek(0)
         sep_reader = PdfReader(sep_buf)
         writer.add_page(sep_reader.pages[0])
-        print(image_name)
 
     with open(outfile, 'wb') as f:
         writer.write(f)
 
 
 def make_all_pages(searchpath, pdffile, outfile, client, boxes_list, colorsJson, info,
-                   separations_folder=None, path_images=None, names=None):
+                   separations_folder=None, path_images=None, names=None, logo_path=None):
     """Generate one ET sheet per source page and merge all sheets into *outfile*.
 
     For single-page PDFs this delegates directly to ``make()`` to avoid any
@@ -642,7 +657,7 @@ def make_all_pages(searchpath, pdffile, outfile, client, boxes_list, colorsJson,
     if len(boxes_list) == 1:
         make(searchpath, pdffile, outfile, client, boxes_list[0], colorsJson, info,
              page_index=0, separations_folder=separations_folder,
-             path_images=path_images, names=names)
+             path_images=path_images, names=names, logo_path=logo_path)
         return
 
     import tempfile
@@ -654,7 +669,7 @@ def make_all_pages(searchpath, pdffile, outfile, client, boxes_list, colorsJson,
             tmp = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
             tmp.close()
             make(searchpath, pdffile, tmp.name, client, boxes, colorsJson, info,
-                 page_index=i)
+                 page_index=i, logo_path=logo_path)
             temp_files.append(tmp.name)
 
         merger = _PdfWriter()

@@ -229,6 +229,7 @@ def makeOneUp():
                 body.get('separationsFolder', ''),
                 body.get('pathImages', []),
                 body.get('names', []),
+                logo_path=body.get('logoPath', ''),
             )
         else:
             # Single-page (backward compatible)
@@ -244,6 +245,7 @@ def makeOneUp():
                 separations_folder=body.get('separationsFolder', ''),
                 path_images=body.get('pathImages', []),
                 names=body.get('names', []),
+                logo_path=body.get('logoPath', ''),
             )
         return 'ok'
     except (KeyError, TypeError) as e:
