@@ -535,22 +535,49 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
 
     from pypdf.generic import DictionaryObject, FloatObject, NumberObject
 
-    # Label: merge inline — pypdf preserves original_bytes for NameObjects, so
-    # the #20-encoded PANTONE names in the written file are consistent between
-    # resources and content.  No Form XObject needed (and clone() of ReportLab
-    # font streams is buggy in pypdf — produces direct objects without indirect_reference).
+    # ---- Label band as a self-contained Form XObject (HUELLA footprint layer) ----
+    # Using FormXObject instead of merge_page() so the label's resources (PANTONE
+    # colour swatches, Helvetica fonts, Nala logo spots) stay isolated inside the
+    # XObject and are not merged into the page's /Resources.  At layout-generation
+    # time the HUELLA layer is stripped, which physically removes /LabelFm and
+    # /NalaFm from the page, eliminating their ink channels from the RIP output.
     label_buf.seek(0)
     label_reader = PdfReader(label_buf)
-    main_page.merge_page(label_reader.pages[0])
+    label_page   = label_reader.pages[0]
 
-    # Nala logo: solo cuando el cliente no tiene logo propio
-    if nala_h > 0:
-        # Form XObject — keeps its PANTONE 7711 C / 225 C etc. self-contained
-        # at the XObject level.  We build the dict manually with primitives (no clone())
-        # to avoid the indirect_reference bug.
+    _lc = label_page[NameObject('/Contents')].get_object()
+    if isinstance(_lc, ArrayObject):
+        _raw_label = b'\n'.join(ref.get_object().get_data() for ref in _lc)
+    else:
+        _raw_label = _lc.get_data()
+
+    _label_xobj = DecodedStreamObject()
+    _label_xobj[NameObject('/Type')]     = NameObject('/XObject')
+    _label_xobj[NameObject('/Subtype')]  = NameObject('/Form')
+    _label_xobj[NameObject('/FormType')] = NumberObject(1)
+    _label_xobj[NameObject('/BBox')] = ArrayObject([
+        FloatObject(0.0), FloatObject(0.0),
+        FloatObject(canvas_w), FloatObject(canvas_h),
+    ])
+    _lpage_res = label_page.get(NameObject('/Resources'))
+    if _lpage_res is not None:
+        _label_xobj[NameObject('/Resources')] = _lpage_res.clone(writer)
+    _label_xobj.set_data(_raw_label)
+    _label_xobj = _label_xobj.flate_encode()
+    _label_fm_ref = writer._add_object(_label_xobj)
+
+    # Register LabelFm in the page's /XObject resources so the invocation below works
+    _pg_res = main_page[NameObject('/Resources')].get_object()
+    if NameObject('/XObject') not in _pg_res:
+        _pg_res[NameObject('/XObject')] = DictionaryObject()
+    _pg_res[NameObject('/XObject')].get_object()[NameObject('/LabelFm')] = _label_fm_ref
+
+    # ---- Nala logo Form XObject (only when client has no logo) ----
+    _has_nala = nala_h > 0
+    if _has_nala:
         scale = 0.6
         nala_reader2 = PdfReader(nala_pdf_path)
-        nala_page = nala_reader2.pages[0]
+        nala_page    = nala_reader2.pages[0]
         _nala_pw = float(nala_page.mediabox.width)
         _nala_ph = float(nala_page.mediabox.height)
 
@@ -559,18 +586,16 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
             _raw_nala = b'\n'.join(ref.get_object().get_data() for ref in _nala_cont)
         else:
             _raw_nala = _nala_cont.get_data()
-        # Strip OC markers from Nala logo (fixes "marked content deleted" preflight error)
         _raw_nala = re.sub(rb'/OC\s+/\w+\s+BDC\s*', b'', _raw_nala)
         _raw_nala = re.sub(rb'\bEMC\b\s*', b'', _raw_nala)
 
         _nala_xobj = DecodedStreamObject()
-        _nala_xobj[NameObject('/Type')] = NameObject('/XObject')
-        _nala_xobj[NameObject('/Subtype')] = NameObject('/Form')
+        _nala_xobj[NameObject('/Type')]     = NameObject('/XObject')
+        _nala_xobj[NameObject('/Subtype')]  = NameObject('/Form')
         _nala_xobj[NameObject('/FormType')] = NumberObject(1)
         _nala_xobj[NameObject('/BBox')] = ArrayObject([
             FloatObject(0), FloatObject(0), FloatObject(_nala_pw), FloatObject(_nala_ph),
         ])
-        # Matrix = [scale 0 0 scale tx ty] — combines scale and translation
         _nala_xobj[NameObject('/Matrix')] = ArrayObject([
             FloatObject(scale), FloatObject(0), FloatObject(0), FloatObject(scale),
             FloatObject(nala_x), FloatObject(nala_y),
@@ -584,24 +609,23 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
         _nala_xobj.set_data(_raw_nala)
         _nala_xobj = _nala_xobj.flate_encode()
         _nala_xref = writer._add_object(_nala_xobj)
-
-        # Register /NalaFm in page /XObject resources
-        _pg_res = main_page[NameObject('/Resources')].get_object()
-        if NameObject('/XObject') not in _pg_res:
-            _pg_res[NameObject('/XObject')] = DictionaryObject()
         _pg_res[NameObject('/XObject')].get_object()[NameObject('/NalaFm')] = _nala_xref
 
-        # Append Nala invocation to page /Contents array
-        _nala_do = DecodedStreamObject()
-        _nala_do.set_data(b'q\n/NalaFm Do\nQ\n')
-        _nala_do_ref = writer._add_object(_nala_do)
-        _curr_contents = main_page[NameObject('/Contents')].get_object()
-        if isinstance(_curr_contents, ArrayObject):
-            _curr_contents.append(_nala_do_ref)
-        else:
-            main_page[NameObject('/Contents')] = ArrayObject(
-                [main_page[NameObject('/Contents')], _nala_do_ref]
-            )
+    # ---- Footprint invocation stream — HUELLA marked-content block ----
+    # BDC/EMC marks this as Optional Content Group "HUELLA" so PDF viewers can
+    # toggle the footprint layer.  strip_footprint.py removes this stream and
+    # the XObject references at layout time to eliminate spurious separations.
+    _fp_inv = b'/OC /HUELLA BDC\nq\n/LabelFm Do\n'
+    if _has_nala:
+        _fp_inv += b'/NalaFm Do\n'
+    _fp_inv += b'Q\nEMC\n'
+    _fp_stream = DecodedStreamObject()
+    _fp_stream.set_data(_fp_inv)
+    _fp_stream = _fp_stream.flate_encode()
+    _fp_ref = writer._add_object(_fp_stream)
+
+    # /Contents = [artwork_stream, footprint_stream] — two explicit streams
+    main_page[NameObject('/Contents')] = ArrayObject([_new_ref, _fp_ref])
 
     # TrimBox = original document trim, repositioned in ET-sheet space
     _tb_x0 = offset_x - desp_x
@@ -644,6 +668,42 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
 
     with open(outfile, 'wb') as f:
         writer.write(f)
+
+    # ---- Add OCG /OCProperties via pikepdf so PDF viewers can toggle HUELLA layer ----
+    _add_huella_ocg(outfile)
+
+
+def _add_huella_ocg(path: str) -> None:
+    """Post-process: register HUELLA OCG in catalog and page resources."""
+    try:
+        import pikepdf as _pk
+        pdf  = _pk.open(path)
+        page = pdf.pages[0]
+
+        ocg = pdf.make_indirect(_pk.Dictionary(
+            Type=_pk.Name('/OCG'),
+            Name=_pk.String('HUELLA'),
+            Intent=_pk.Array([_pk.Name('/Design')]),
+        ))
+        pdf.Root['/OCProperties'] = _pk.Dictionary(
+            OCGs=_pk.Array([ocg]),
+            D=_pk.Dictionary(
+                BaseState=_pk.Name('/ON'),
+                Order=_pk.Array([ocg]),
+                ON=_pk.Array([ocg]),
+            ),
+        )
+        res = page.get('/Resources')
+        if res is None:
+            page['/Resources'] = _pk.Dictionary()
+            res = page['/Resources']
+        if '/Properties' not in res:
+            res['/Properties'] = _pk.Dictionary()
+        res['/Properties']['/HUELLA'] = ocg
+
+        pdf.save(path, allow_overwriting_input=True)
+    except Exception as _e:
+        print(f'[one_up] OCG setup skipped (non-fatal): {_e}')
 
 
 def make_all_pages(searchpath, pdffile, outfile, client, boxes_list, colorsJson, info,

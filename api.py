@@ -74,6 +74,21 @@ def colorNames():
         return _server_error(e)
 
 
+@app.route('/strip-footprint', methods=['POST'])
+def strip_footprint_route():
+    try:
+        from strip_footprint import strip_huella
+        body = request.get_json(force=True)
+        src  = body['src']
+        dst  = body['dst']
+        strip_huella(src, dst)
+        return jsonify({'ok': True, 'dst': dst})
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
 @app.route('/colorsBar', methods=['POST'])
 def colorsBar():
     try:
@@ -155,6 +170,27 @@ def info():
             body['sideX'], body['sideY'],
         )
         return ret
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+@app.route('/impositionInfo', methods=['POST'])
+def impositionInfo():
+    try:
+        from imposition_info import make
+        body = request.get_json(force=True)
+        make(
+            body['searchpath'], body['pdffile'], body['outfile'],
+            body['colors'],
+            body['sheetNum'], body['sheetTotal'], body['side'],
+            body['sheetWidth'], body['sheetHeight'],
+            body['qtyWidth'], body['qtyHeight'],
+            body['gapWidth'], body['gapHeight'],
+            body['pinzaPapel'], body['colaMargen'],
+        )
+        return 'ok'
     except (KeyError, TypeError) as e:
         return _bad_request(str(e))
     except Exception as e:
@@ -690,6 +726,191 @@ def impose():
         return _bad_request(str(e))
     except Exception as e:
         return _server_error(e)
+
+
+# ---------------------------------------------------------------------------
+# Offset imposition
+# ---------------------------------------------------------------------------
+
+@app.route('/offsetImpose', methods=['POST'])
+def makeOffsetImposition():
+    """
+    Pipeline: imposición → marcas de corte → info del pliego.
+
+    Body JSON:
+      pdffile           : ruta del PDF fuente de la etiqueta
+      outfile           : ruta del PDF final de salida
+      searchpath        : carpeta de recursos (PDFlib compat, puede ser ".")
+      colors            : array de tintas spot para las marcas
+      plateWidth        : ancho plancha mm (MediaBox)
+      plateHeight       : alto plancha mm
+      paperWidth        : ancho papel mm (CropBox)
+      paperHeight       : alto papel mm
+      qtyWidth          : columnas
+      qtyHeight         : filas
+      gapWidth          : gap horizontal mm
+      gapHeight         : gap vertical mm
+      marginWidth       : margen lateral mm (actualmente ignorado — centrado automático)
+      pinzaPlancha      : pinza plancha mm (def. 47)
+      pinzaPapel        : pinza papel mm (def. 13)
+      colaMargen        : cola / control strip mm (def. 6)
+      cropSize          : longitud de las marcas de corte mm (def. 3)
+      cropDist          : distancia marca-borde grilla mm (def. 2)
+      cropWeight        : grosor líneas de corte pt (def. 0.25)
+      sheetNum          : número de este pliego (def. 1)
+      sheetTotal        : total pliegos del trabajo (def. 1)
+      side              : 'Frente' o 'Dorso' (def. 'Frente')
+    """
+    import os, tempfile
+    try:
+        from offset_impose import make_offset_imposition
+        from crop_stations  import make as make_crop
+        from imposition_info import make as make_info
+
+        body = request.get_json(force=True)
+
+        pdffile      = body['pdffile']
+        pdffile_back = body.get('pdffile_back', None)
+        outfile    = body['outfile']
+        searchpath = body.get('searchpath', '.')
+        colors     = body.get('colors', [{'name': 'All', 'book': '', 'density': 1}])
+
+        plate_w    = float(body['plateWidth'])
+        plate_h    = float(body['plateHeight'])
+        paper_w    = float(body['paperWidth'])
+        paper_h    = float(body['paperHeight'])
+        qty_w      = int(body['qtyWidth'])
+        qty_h      = int(body['qtyHeight'])
+        gap_w      = float(body['gapWidth'])
+        gap_h      = float(body['gapHeight'])
+        margin_w   = float(body.get('marginWidth', 0))
+        pinza_p    = float(body.get('pinzaPlancha', 47))
+        pinza_pap  = float(body.get('pinzaPapel',   13))
+        cola       = float(body.get('colaMargen',    6))
+        mode       = body.get('mode', 'simplex')
+
+        crop_size   = float(body.get('cropSize',   3))
+        crop_dist   = float(body.get('cropDist',   2))
+        crop_weight = float(body.get('cropWeight', 0.25))
+
+        sheet_num   = int(body.get('sheetNum',   1))
+        sheet_total = int(body.get('sheetTotal', 1))
+        side        = body.get('side', 'Frente')
+
+        # ── Paso 1: imposición ─────────────────────────────────────────────
+        tmp1 = outfile + '.step1.pdf'
+        result = make_offset_imposition(
+            pdffile          = pdffile,
+            pdffile_back     = pdffile_back,
+            outfile          = tmp1,
+            plate_w_mm       = plate_w,
+            plate_h_mm       = plate_h,
+            paper_w_mm       = paper_w,
+            paper_h_mm       = paper_h,
+            qty_w            = qty_w,
+            qty_h            = qty_h,
+            gap_w_mm         = gap_w,
+            gap_h_mm         = gap_h,
+            margin_w_mm      = margin_w,
+            pinza_plancha_mm = pinza_p,
+            pinza_papel_mm   = pinza_pap,
+            cola_margen_mm   = cola,
+            mode             = mode,
+        )
+
+        # ── Paso 2: marcas de corte ────────────────────────────────────────
+        # make_offset_imposition() ya calculó las stations en formato
+        # correcto para crop_stations (mm, yStart top-down desde el borde
+        # superior del PDF). Para W&T y H2H hay 2 stations (frente + reverso).
+        tmp2 = outfile + '.step2.pdf'
+        make_crop(
+            searchpath, tmp1, tmp2,
+            colors,
+            result['stations'],
+            crop_size, crop_dist, crop_dist, crop_weight,
+        )
+
+        # ── Paso 3: texto informativo en la zona de cola ───────────────────
+        make_info(
+            searchpath, tmp2, outfile,
+            colors,
+            sheet_num, sheet_total, side,
+            paper_w, paper_h,
+            qty_w, qty_h,
+            gap_w, gap_h,
+            pinza_pap, cola,
+        )
+
+        # limpiar temporales
+        for f in (tmp1, tmp2):
+            try: os.remove(f)
+            except OSError: pass
+
+        return jsonify({'ok': True, **result})
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+# ---------------------------------------------------------------------------
+# Mechanics routes
+# ---------------------------------------------------------------------------
+
+@app.route('/mechanics/generate', methods=['POST'])
+def mechanicsGenerate():
+    """
+    Generate a parametric mechanical packaging template as a vector PDF.
+
+    Body: {
+      family:     string  — 'pillow_bag' | 'gusseted_bag' | 'sleeve'
+      params:     object  — family-specific parameters (all dimensions in mm)
+      outputPath: string  — absolute path for the output PDF
+    }
+
+    Pillow bag params: width, repeat, seal_top, seal_bottom, fin_overlap
+    Gusseted bag params: width, repeat, seal_top, seal_bottom, gusset_depth
+    Sleeve params: width, repeat, overlap
+
+    Optional params (all families): bleed, safe_inset, artwork_inset
+
+    Returns: { ok: true, family, outputPath } or { error: '...' }
+    """
+    try:
+        from mechanics.families import get_generator
+        from mechanics.renderer import PDFRenderer
+
+        body        = request.get_json(force=True)
+        family      = body.get('family')
+        params      = body.get('params')
+        output_path = body.get('outputPath')
+
+        if not family:
+            return _bad_request("'family' is required")
+        if not params:
+            return _bad_request("'params' is required")
+        if not output_path:
+            return _bad_request("'outputPath' is required")
+
+        generator = get_generator(family)
+        assembly  = generator.generate(params)
+        PDFRenderer().render(assembly, output_path)
+
+        return jsonify({'ok': True, 'family': family, 'outputPath': output_path})
+
+    except ValueError as e:
+        return _bad_request(str(e))
+    except (KeyError, TypeError) as e:
+        return _bad_request(str(e))
+    except Exception as e:
+        return _server_error(e)
+
+
+@app.route('/mechanics/families', methods=['GET'])
+def mechanicsFamilies():
+    """Return the list of available packaging families."""
+    from mechanics.families.registry import REGISTRY
+    return jsonify({'families': sorted(REGISTRY.keys())})
 
 
 # ---------------------------------------------------------------------------
