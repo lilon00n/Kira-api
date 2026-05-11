@@ -70,6 +70,8 @@ def strip_huella(src_path: str, dst_path: str) -> None:
     # 5. Build a brand-new PDF that copies only reachable objects from page 0.
     #    Unreferenced objects (removed XObjects with their PANTONE colour spaces)
     #    are NOT copied — they will not appear in the output file at all.
+    #    object_stream_mode=disable writes PDF 1.4-compatible cross-ref tables so
+    #    muhammara/hummus can parse the file (it does not support PDF 1.5 object streams).
     clean = pikepdf.Pdf.new()
     clean.pages.append(page)
-    clean.save(dst_path)
+    clean.save(dst_path, object_stream_mode=pikepdf.ObjectStreamMode.disable)
