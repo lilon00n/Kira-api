@@ -472,7 +472,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     # Wrap artwork in q/cm/Q so it renders at the ET artwork origin.
     # Resources (CS0..CS4, Fm0..Fm117, etc.) stay at page level — Artpro+ requires this.
     _header = f'q\n1 0 0 1 {offset_x - _src_x0:.6f} {offset_y - _src_y0:.6f} cm\n'.encode()
-    _wrapped = _header + _raw_art + b'\nQ\n'
+    _wrapped = _header + _raw_art + b'\nQ\n/CropFm Do\n'
     # flate_encode() compresses the stream and sets /Filter /FlateDecode explicitly,
     # which avoids pypdf length-calculation quirks for DecodedStreamObject.
     _new_stream = DecodedStreamObject()
@@ -483,6 +483,21 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
 
     canvas_w = float(media_w)
     canvas_h = float(media_h)
+
+    # ---- Crop marks — separate FormXObject, survives strip_footprint.py ----
+    crop_m_y = MEDIA_EXCESS + label_h + CROP_EXCESS + trim_h
+    crop_buf  = io.BytesIO()
+    crop_c    = Canvas(crop_buf, pagesize=(canvas_w, canvas_h))
+    _draw_crop_marks(
+        crop_c,
+        MEDIA_EXCESS + CROP_EXCESS + add_info,
+        crop_m_y,
+        CROP_SIZE * POINT_TO_MM, 0.01,
+        0, 0,
+        trim_w, trim_h,
+    )
+    crop_c.showPage()
+    crop_c.save()
 
     # ---- Draw label overlay with ReportLab at standard ET coordinates ----
     # All drawing helpers use positive ET-sheet coords:
@@ -507,16 +522,6 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
                         width=logo_w, height=logo_h, preserveAspectRatio=True)
         except Exception:
             pass
-
-    crop_m_y = MEDIA_EXCESS + label_h + CROP_EXCESS + trim_h
-    _draw_crop_marks(
-        c,
-        MEDIA_EXCESS + CROP_EXCESS + add_info,
-        crop_m_y,
-        CROP_SIZE * POINT_TO_MM, 0.01,
-        0, 0,
-        trim_w, trim_h,
-    )
 
     _draw_registration_marks(c, label_h, boxes, add_info)
     _draw_cotas(c, label_h, boxes, add_info)
@@ -571,6 +576,31 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     if NameObject('/XObject') not in _pg_res:
         _pg_res[NameObject('/XObject')] = DictionaryObject()
     _pg_res[NameObject('/XObject')].get_object()[NameObject('/LabelFm')] = _label_fm_ref
+
+    # ---- Crop marks FormXObject — survives strip_footprint.py (not part of HUELLA) ----
+    crop_buf.seek(0)
+    _crop_reader = PdfReader(crop_buf)
+    _crop_page_r = _crop_reader.pages[0]
+    _cc = _crop_page_r[NameObject('/Contents')].get_object()
+    if isinstance(_cc, ArrayObject):
+        _raw_crop = b'\n'.join(ref.get_object().get_data() for ref in _cc)
+    else:
+        _raw_crop = _cc.get_data()
+    _crop_xobj = DecodedStreamObject()
+    _crop_xobj[NameObject('/Type')]     = NameObject('/XObject')
+    _crop_xobj[NameObject('/Subtype')]  = NameObject('/Form')
+    _crop_xobj[NameObject('/FormType')] = NumberObject(1)
+    _crop_xobj[NameObject('/BBox')] = ArrayObject([
+        FloatObject(0.0), FloatObject(0.0),
+        FloatObject(canvas_w), FloatObject(canvas_h),
+    ])
+    _crop_cpage_res = _crop_page_r.get(NameObject('/Resources'))
+    if _crop_cpage_res is not None:
+        _crop_xobj[NameObject('/Resources')] = _crop_cpage_res.clone(writer)
+    _crop_xobj.set_data(_raw_crop)
+    _crop_xobj = _crop_xobj.flate_encode()
+    _crop_fm_ref = writer._add_object(_crop_xobj)
+    _pg_res[NameObject('/XObject')].get_object()[NameObject('/CropFm')] = _crop_fm_ref
 
     # ---- Nala logo Form XObject (only when client has no logo) ----
     _has_nala = nala_h > 0
@@ -637,6 +667,13 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
     main_page.bleedbox = RectangleObject((
         _tb_x0 - _bl, _tb_y0 - _bl,
         _tb_x0 + trim_w + _bl, _tb_y0 + trim_h + _bl,
+    ))
+
+    # ArtBox = TrimBox expanded by full crop-mark extent (line length = CROP_EXCESS).
+    # strip_footprint.py uses this box for MediaBox/CropBox on the intermediate layout PDF.
+    main_page[NameObject('/ArtBox')] = RectangleObject((
+        _tb_x0 - CROP_EXCESS, _tb_y0 - CROP_EXCESS,
+        _tb_x0 + trim_w + CROP_EXCESS, _tb_y0 + trim_h + CROP_EXCESS,
     ))
 
     # MediaBox = full ET sheet (MEDIA_EXCESS=10mm outer margin around all content)

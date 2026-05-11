@@ -4,15 +4,17 @@ strip_footprint.py
 Strips the HUELLA footprint layer from a OneUP ET-sheet PDF.
 
 OneUP PDFs carry a two-stream /Contents:
-  [0]  artwork_stream  — customer artwork (q/cm/Q block, no footprint inks)
+  [0]  artwork_stream  — customer artwork (q/cm/Q block) + /CropFm Do
   [1]  footprint_stream — label band + Nala logo invocation (BDC/EMC wrapped)
 
 At layout-generation time this module:
   1. Drops the footprint content stream (index >= 1).
   2. Removes /LabelFm and /NalaFm from page /XObject resources.
+     /CropFm (crop-mark FormXObject, in stream 0) is preserved.
   3. Removes /HUELLA from page /Properties.
   4. Removes /OCProperties from the catalog.
-  5. Resizes MediaBox and CropBox to match BleedBox.
+  5. Resizes MediaBox and CropBox to ArtBox (full crop-mark extent,
+     set by one_up.py) when present; falls back to BleedBox.
      TrimBox and BleedBox are left untouched (used by layout calculations).
 
 Result: a compact PDF containing only the artwork ink channels — no colour-bar
@@ -53,12 +55,13 @@ def strip_huella(src_path: str, dst_path: str) -> None:
         if props is not None and '/HUELLA' in props:
             del props['/HUELLA']
 
-    # 3. Resize MediaBox and CropBox to BleedBox
-    bleedbox = page.get('/BleedBox')
-    if bleedbox is not None:
-        bb_vals = [v for v in bleedbox]
-        page['/MediaBox'] = pikepdf.Array(bb_vals)
-        page['/CropBox']  = pikepdf.Array(bb_vals)
+    # 3. Resize MediaBox and CropBox to ArtBox (crop-marks extent) or BleedBox
+    artbox  = page.get('/ArtBox')
+    ref_box = artbox if artbox is not None else page.get('/BleedBox')
+    if ref_box is not None:
+        bv = [float(v) for v in ref_box]
+        page['/MediaBox'] = pikepdf.Array(bv)
+        page['/CropBox']  = pikepdf.Array(bv)
 
     # 4. Remove /OCProperties from catalog
     if '/OCProperties' in pdf.Root:
