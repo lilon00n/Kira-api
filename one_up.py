@@ -675,6 +675,7 @@ def make(searchpath, pdffile, outfile, client, boxes, colorsJson, info,
 
 def _add_huella_ocg(path: str) -> None:
     """Post-process: register HUELLA OCG in catalog and page resources."""
+    import tempfile, shutil
     try:
         import pikepdf as _pk
         pdf  = _pk.open(path)
@@ -701,9 +702,15 @@ def _add_huella_ocg(path: str) -> None:
             res['/Properties'] = _pk.Dictionary()
         res['/Properties']['/HUELLA'] = ocg
 
-        pdf.save(path, allow_overwriting_input=True)
+        # Save to a temp file then replace — avoids overwriting the open file
+        tmp = tempfile.mktemp(suffix='.pdf', dir=os.path.dirname(path))
+        pdf.save(tmp)
+        pdf.close()
+        shutil.move(tmp, path)
     except Exception as _e:
-        print(f'[one_up] OCG setup skipped (non-fatal): {_e}')
+        import traceback
+        print(f'[one_up] OCG setup failed: {_e}')
+        traceback.print_exc()
 
 
 def make_all_pages(searchpath, pdffile, outfile, client, boxes_list, colorsJson, info,
